@@ -7,6 +7,13 @@ import { bad, failure } from "@/lib/api-utils";
 
 const Input = z.object({ bvn: z.string().regex(/^\d{11}$/) }).strict();
 
+type BvnLogContext = {
+  session_id?: string;
+  customer_id?: string;
+  reservation_id?: string;
+  account_id?: string;
+};
+
 type QoreIdBvnResult = {
   id?: string | number;
   applicant?: { firstname?: string; lastname?: string };
@@ -15,17 +22,68 @@ type QoreIdBvnResult = {
   bvn?: { firstname?: string; lastname?: string; birthdate?: string; gender?: string };
 };
 
+function errorDetails(error: unknown) {
+  if (!(error instanceof Error)) {
+    return {
+      message: String(error),
+    };
+  }
+
+  const metadata = error as Error & {
+    status?: number;
+    code?: string;
+    details?: string;
+    hint?: string;
+    provider?: string;
+    originalError?: unknown;
+  };
+
+  return {
+    name: error.name,
+    message: error.message,
+    status: metadata.status,
+    code: metadata.code,
+    details: metadata.details,
+    hint: metadata.hint,
+    provider: metadata.provider,
+    originalError:
+      metadata.originalError instanceof Error
+        ? {
+            name: metadata.originalError.name,
+            message: metadata.originalError.message,
+          }
+        : metadata.originalError
+          ? "[redacted]"
+          : undefined,
+  };
+}
+
+function logBvnError(
+  stage: string,
+  error: unknown,
+  context: BvnLogContext = {},
+) {
+  console.error("[kyc.verify-bvn]", {
+    stage,
+    ...context,
+    error: errorDetails(error),
+  });
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ session_id: string }> },
 ) {
+  let context: BvnLogContext = {};
   try {
     const { bvn } = Input.parse(await request.json());
     const { session_id } = await params;
+    context = { session_id };
     const { session, customer, supabase } = await requireKycSessionAccess(
       request,
       session_id,
     );
+    context.customer_id = customer.id;
 
     if (session.status !== "CONSENTED") {
       return NextResponse.json(
@@ -39,7 +97,10 @@ export async function POST(
       .select("first_name,last_name,email,date_of_birth,gender,whatsapp_number")
       .eq("id", customer.id)
       .single();
-    if (profileError) throw profileError;
+    if (profileError) {
+      logBvnError("load_profile", profileError, context);
+      throw profileError;
+    }
     if (!profile.first_name || !profile.last_name || !profile.email) {
       return NextResponse.json(
         { error: "Complete the customer name and email before KYC" },
@@ -53,7 +114,11 @@ export async function POST(
       .eq("customer_id", customer.id)
       .eq("provider", "onecap_providus")
       .maybeSingle();
-    if (existingError) throw existingError;
+    if (existingError) {
+      logBvnError("load_existing_virtual_account", existingError, context);
+      throw existingError;
+    }
+    if (existing?.id) context.account_id = existing.id;
     if (existing?.status === "ACTIVE") {
       return NextResponse.json({ status: "success", virtual_account: existing });
     }
@@ -83,7 +148,11 @@ export async function POST(
         { status: 409 },
       );
     }
-    if (reservationError) throw reservationError;
+    if (reservationError) {
+      logBvnError("reserve_virtual_account", reservationError, context);
+      throw reservationError;
+    }
+    context.reservation_id = reservation.id;
 
     try {
       const result = await qoreid.verifyBvnBasic<QoreIdBvnResult>(bvn, {
@@ -93,6 +162,14 @@ export async function POST(
         phone: profile.whatsapp_number,
         email: profile.email,
         gender: profile.gender || undefined,
+      });
+
+      console.info("[kyc.verify-bvn]", {
+        stage: "qoreid_response",
+        ...context,
+        provider_verification_id: result.id ? String(result.id) : null,
+        provider_status: result.status?.status || result.status?.state || null,
+        name_match: result.summary?.bvn_check?.status || null,
       });
 
       const verified = result.status?.status?.toLowerCase() === "verified";
@@ -128,7 +205,10 @@ export async function POST(
         .eq("id", reservation.id)
         .select("id,account_number,account_name,bank_name,status")
         .single();
-      if (saveError) throw saveError;
+      if (saveError) {
+        logBvnError("save_virtual_account", saveError, context);
+        throw saveError;
+      }
 
       const safeKycResult = {
         provider_verification_id: result.id ? String(result.id) : null,
@@ -148,20 +228,30 @@ export async function POST(
         })
         .eq("id", session_id)
         .eq("customer_id", customer.id);
-      if (kycError) throw kycError;
+      if (kycError) {
+        logBvnError("mark_kyc_verified", kycError, context);
+        throw kycError;
+      }
 
       return NextResponse.json(
         { status: "success", virtual_account: saved },
         { status: 201 },
       );
     } catch (error) {
-      await supabase
+      logBvnError("provider_or_provisioning", error, context);
+      const { error: failedUpdateError } = await supabase
         .from("virtual_accounts")
         .update({ status: "FAILED" })
         .eq("id", reservation.id);
+      if (failedUpdateError) {
+        logBvnError("mark_virtual_account_failed", failedUpdateError, context);
+      }
       throw error;
     }
   } catch (error) {
+    if (!(error instanceof z.ZodError)) {
+      logBvnError("request_failed", error, context);
+    }
     return error instanceof z.ZodError ? bad(error) : failure(error);
   }
 }
