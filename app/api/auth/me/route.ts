@@ -1,0 +1,2 @@
+import { NextResponse } from "next/server"; import { requireAuth } from "@/lib/auth/server"; import { CurrentUser } from "@/lib/api-contracts"; import { failure } from "@/lib/api-utils";
+export async function GET() { try { const {user,supabase}=await requireAuth(); const {data:customer,error}=await supabase.from("customers").select("*").eq("user_id",user.id).maybeSingle(); if(error) throw error; return NextResponse.json(CurrentUser.parse({user,customer})); } catch(error) { return failure(error); } }

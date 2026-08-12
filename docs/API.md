@@ -1,0 +1,724 @@
+# Tripkopa API guide
+
+This guide documents the API currently implemented by the Next.js route handlers in `app/api`.
+
+## Base URL and format
+
+Use the URL of the running Next.js application:
+
+```text
+Local:      http://localhost:3000
+Production: https://<your-tripkopa-domain>
+```
+
+All request and response bodies are JSON unless stated otherwise. For requests with a body, send:
+
+```http
+Content-Type: application/json
+```
+
+The examples below use:
+
+```bash
+export TRIPKOPA_URL="http://localhost:3000"
+export TRIPKOPA_API_KEY="your-WHATSAPP_AGENT_API_SECRET"
+export CUSTOMER_WHATSAPP="+2348012345678"
+```
+
+`TRIPKOPA_API_KEY` is a server secret. Never put it in browser code, a mobile app, or a public WhatsApp workflow payload.
+
+## Authentication modes
+
+### Customer/agent authentication
+
+Most customer endpoints are intended to be called by the trusted SupaOS/WhatsApp backend. Send both headers on every request:
+
+```http
+X-API-Key: <WHATSAPP_AGENT_API_SECRET>
+X-WhatsApp-Number: +2348012345678
+```
+
+The WhatsApp number must be an international E.164 number: a leading `+`, country code, and 8–15 digits. On the first authenticated request for a number, the API automatically creates an active customer and an NGN wallet.
+
+Reusable curl arguments:
+
+```bash
+curl "$TRIPKOPA_URL/api/me" \
+  -H "X-API-Key: $TRIPKOPA_API_KEY" \
+  -H "X-WhatsApp-Number: $CUSTOMER_WHATSAPP"
+```
+
+### Staff authentication
+
+Authentication and operations routes use a Supabase session stored in HTTP cookies. A browser should retain the `Set-Cookie` headers returned by login. A script can use a cookie jar:
+
+```bash
+curl -c tripkopa-cookies.txt -b tripkopa-cookies.txt \
+  -X POST "$TRIPKOPA_URL/api/auth/login" \
+  -H 'Content-Type: application/json' \
+  --data '{"email":"operator@example.com","password":"your-password"}'
+```
+
+Use `-c tripkopa-cookies.txt -b tripkopa-cookies.txt` on later operations calls. The resolve endpoint also requires a `staff_profiles.role` of `operations`, `operations_staff`, or `admin`. The current list, reconciliation, and cancellation handlers require a valid session but do not perform that extra role check.
+
+### KYC browser authentication
+
+A KYC link contains a one-time token. `POST /api/kyc/sessions/exchange` exchanges it for an HTTP-only `tripkopa_kyc_session` cookie. Retain that cookie when calling the session, consent, and BVN endpoints from the KYC browser flow. Those three endpoints may alternatively use customer/agent headers.
+
+## Common responses and errors
+
+Successful create operations normally return `201 Created`; reads and updates normally return `200 OK`; logout returns `204 No Content`.
+
+Errors use this shape:
+
+```json
+{
+  "error": "Human-readable error message"
+}
+```
+
+Common statuses are:
+
+| Status | Meaning |
+|---|---|
+| `400` | Invalid JSON, invalid request fields, missing identity header, or missing idempotency key |
+| `401` | Invalid API key, missing/invalid session, or bad webhook signature |
+| `403` | Suspended/closed customer or insufficient operations role |
+| `404` | An explicitly checked resource was not found |
+| `409` | Resource state conflict, expired KYC state, duplicate transition, or missing KYC prerequisite |
+| `410` | A one-time KYC link is expired, invalid, or already used |
+| `422` | Identity/deposit data could not be matched |
+| `500` | Provider, database, or configuration failure |
+
+Many records come directly from Postgres. Decimal amount fields may therefore be serialized as either JSON numbers or numeric strings. Clients should accept both.
+
+## Endpoint index
+
+`Agent` means the two customer/agent headers, `Staff` means a Supabase session cookie, and `KYC` means either a KYC browser cookie or Agent authentication.
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `POST` | `/api/auth/signup` | Public | Create a Supabase user/session |
+| `POST` | `/api/auth/login` | Public | Start a Supabase session |
+| `POST` | `/api/auth/refresh` | Public | Refresh a session with a refresh token |
+| `POST` | `/api/auth/logout` | Staff | End the current session |
+| `POST` | `/api/auth/password-reset` | Public | Send a password-reset email |
+| `POST` | `/api/auth/password-reset/confirm` | Public | Set a new password using reset tokens |
+| `GET` | `/api/auth/me` | Staff | Return the authenticated user and linked customer |
+| `GET` | `/api/me` | Agent | Resolve/create and return the customer profile |
+| `PATCH` | `/api/me` | Agent | Update the customer profile |
+| `GET` | `/api/me/profile` | Agent | Alias for `GET /api/me` |
+| `PATCH` | `/api/me/profile` | Agent | Alias for `PATCH /api/me` |
+| `GET` | `/api/me/kyc` | Agent | Return the most recent KYC state |
+| `POST` | `/api/kyc/sessions` | Agent | Create a 10-minute KYC link |
+| `POST` | `/api/kyc/sessions/exchange` | One-time token | Exchange the link token for a KYC cookie |
+| `GET` | `/api/kyc/sessions/{session_id}` | KYC | Read a KYC session |
+| `POST` | `/api/kyc/sessions/{session_id}/consent` | KYC | Record privacy consent |
+| `POST` | `/api/kyc/sessions/{session_id}/verify-bvn` | KYC | Verify BVN and provision a virtual account |
+| `POST` | `/api/flights/searches` | Agent | Search for flights and store the result |
+| `GET` | `/api/flights/searches/{search_id}` | Agent | Read a stored flight search |
+| `GET` | `/api/quotes/{quote_id}` | Agent | Read a customer quote |
+| `POST` | `/api/quotes/{quote_id}/revalidate` | Agent | Revalidate and version a quote |
+| `POST` | `/api/bookings` | Agent | Create a booking from a quote |
+| `GET` | `/api/bookings/{booking_id}` | Agent | Read a booking |
+| `GET` | `/api/bookings/{booking_id}/itinerary` | Agent | Read an itinerary |
+| `GET` | `/api/bookings/{booking_id}/repayment` | Agent | List a booking's installments |
+| `GET` | `/api/installments/{installment_id}` | Agent | Read one installment |
+| `GET` | `/api/wallet` | Agent | Read wallet and virtual-account details |
+| `GET` | `/api/wallet/ledger` | Agent | List wallet ledger entries |
+| `POST` | `/api/payments/intents` | Agent | Create idempotent bank-transfer instructions |
+| `GET` | `/api/payments/{payment_id}` | Agent | Read a payment |
+| `POST` | `/api/payments/{payment_id}/refunds` | Agent | Request a refund |
+| `GET` | `/api/events` | Agent | List customer operational events |
+| `GET` | `/api/operations/bookings` | Staff | List all bookings |
+| `POST` | `/api/operations/bookings/{booking_id}/cancel` | Staff | Mark a booking cancellation pending |
+| `POST` | `/api/operations/bookings/{booking_id}/resolve` | Staff + role | Resolve an operational booking/case |
+| `GET` | `/api/operations/reconciliation` | Staff | List reconciliation records |
+| `POST` | `/api/webhooks/payments/onecap` | OneCap signature | Process a successful virtual-account deposit |
+| `POST` | `/api/webhooks/payments/paystack` | Paystack signature | Store a Paystack event |
+| `POST` | `/api/webhooks/kyc/qoreid` | QoreID signature | Store a redacted QoreID event |
+
+## Customer profile
+
+### Get or create the current customer
+
+```http
+GET /api/me
+```
+
+Example:
+
+```bash
+curl "$TRIPKOPA_URL/api/me" \
+  -H "X-API-Key: $TRIPKOPA_API_KEY" \
+  -H "X-WhatsApp-Number: $CUSTOMER_WHATSAPP"
+```
+
+Representative response:
+
+```json
+{
+  "id": "customer-uuid",
+  "whatsapp_number": "+2348012345678",
+  "status": "ACTIVE",
+  "first_name": null,
+  "last_name": null,
+  "preferred_currency": "NGN",
+  "profile_completed_at": null
+}
+```
+
+### Update the current customer
+
+```http
+PATCH /api/me
+```
+
+All fields are optional, but unknown fields are rejected. Accepted fields:
+
+| Field | Rules |
+|---|---|
+| `title` | `MR`, `MRS`, `MISS`, `MS`, or `DR` |
+| `first_name`, `last_name` | 1–100 characters |
+| `middle_name` | 1–100 characters or `null` |
+| `email` | Valid email or `null` |
+| `date_of_birth` | `YYYY-MM-DD` or `null` |
+| `gender` | `MALE`, `FEMALE`, `OTHER`, or `null` |
+| `preferred_currency` | Three letters; normalized to uppercase |
+
+```bash
+curl -X PATCH "$TRIPKOPA_URL/api/me" \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: $TRIPKOPA_API_KEY" \
+  -H "X-WhatsApp-Number: $CUSTOMER_WHATSAPP" \
+  --data '{
+    "title":"MR",
+    "first_name":"John",
+    "last_name":"Doe",
+    "email":"john@example.com",
+    "date_of_birth":"1990-01-01",
+    "gender":"MALE",
+    "preferred_currency":"NGN"
+  }'
+```
+
+`GET /api/me/profile` and `PATCH /api/me/profile` are aliases implemented by the same profile handler.
+
+### Get current KYC status
+
+```http
+GET /api/me/kyc
+```
+
+Response when no session exists:
+
+```json
+{"status":"NOT_STARTED","session":null}
+```
+
+Otherwise, `session` contains `status`, `provider`, `expires_at`, and `normalized_result` from the newest session.
+
+## KYC workflow
+
+The expected sequence is create session → open returned link → exchange token → consent → verify BVN. Complete the customer's first name, last name, and email before BVN verification.
+
+### 1. Create a KYC session
+
+```http
+POST /api/kyc/sessions
+```
+
+Body; both fields have defaults and `{}` is valid:
+
+```json
+{
+  "provider": "qoreid",
+  "purpose": "identity_verification"
+}
+```
+
+Returns `201` with the KYC session and a one-time `url`. The session expires after 10 minutes.
+
+```bash
+curl -X POST "$TRIPKOPA_URL/api/kyc/sessions" \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: $TRIPKOPA_API_KEY" \
+  -H "X-WhatsApp-Number: $CUSTOMER_WHATSAPP" \
+  --data '{}'
+```
+
+### 2. Exchange the one-time token
+
+```http
+POST /api/kyc/sessions/exchange
+```
+
+Extract the token from `/verify/s/{token}`, then retain the response cookie:
+
+```bash
+curl -c kyc-cookies.txt -b kyc-cookies.txt \
+  -X POST "$TRIPKOPA_URL/api/kyc/sessions/exchange" \
+  -H 'Content-Type: application/json' \
+  --data '{"token":"the-token-from-the-link"}'
+```
+
+Response:
+
+```json
+{
+  "session_id": "session-uuid",
+  "status": "PENDING",
+  "expires_at": "2026-08-11T12:10:00.000Z"
+}
+```
+
+### 3. Inspect the session
+
+```http
+GET /api/kyc/sessions/{session_id}
+```
+
+Use either the KYC cookie jar or Agent headers. Sensitive raw BVN data is not returned.
+
+### 4. Record consent
+
+```http
+POST /api/kyc/sessions/{session_id}/consent
+```
+
+```bash
+curl -c kyc-cookies.txt -b kyc-cookies.txt \
+  -X POST "$TRIPKOPA_URL/api/kyc/sessions/$SESSION_ID/consent" \
+  -H 'Content-Type: application/json' \
+  --data '{"consent":true,"privacy_notice_version":"1.0"}'
+```
+
+Only literal `true` and privacy notice version `1.0` are accepted. The response contains `session_id`, status `CONSENTED`, and the configured `provider_url` or `null`.
+
+### 5. Verify BVN and provision Providus account
+
+```http
+POST /api/kyc/sessions/{session_id}/verify-bvn
+```
+
+The BVN must be exactly 11 digits. This endpoint is accepted only while the session is `CONSENTED`.
+
+```bash
+curl -c kyc-cookies.txt -b kyc-cookies.txt \
+  -X POST "$TRIPKOPA_URL/api/kyc/sessions/$SESSION_ID/verify-bvn" \
+  -H 'Content-Type: application/json' \
+  --data '{"bvn":"12345678901"}'
+```
+
+Successful new provisioning returns `201`:
+
+```json
+{
+  "status": "success",
+  "virtual_account": {
+    "id": "account-uuid",
+    "account_number": "0123456789",
+    "account_name": "JOHN DOE",
+    "bank_name": "Providus Bank",
+    "status": "ACTIVE"
+  }
+}
+```
+
+An already-active account returns the same shape with `200`. The raw BVN is sent to QoreID and OneCap during this request but is not persisted or returned.
+
+## Flight searches and quotes
+
+### Search flights
+
+```http
+POST /api/flights/searches
+```
+
+```bash
+curl -X POST "$TRIPKOPA_URL/api/flights/searches" \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: $TRIPKOPA_API_KEY" \
+  -H "X-WhatsApp-Number: $CUSTOMER_WHATSAPP" \
+  --data '{
+    "origin":"LOS",
+    "destination":"ABV",
+    "departure_date":"2026-09-15",
+    "return_date":"2026-09-20",
+    "trip_type":"return",
+    "passenger_count":1,
+    "cabin_class":"Economy",
+    "payment_preference":"flexible"
+  }'
+```
+
+Rules and defaults:
+
+| Field | Required | Rule/default |
+|---|---|---|
+| `origin` | Yes | At least 3 characters |
+| `destination` | Yes | At least 3 characters |
+| `departure_date` | Yes | String passed to the flight provider |
+| `return_date` | No | String or `null` |
+| `trip_type` | No | `one_way` (default) or `return` |
+| `passenger_count` | No | Positive integer; default `1` |
+| `cabin_class` | No | Default `Economy` |
+| `payment_preference` | No | `full` (default) or `flexible` |
+
+Returns `201` with a stored search record whose `results` field contains the provider response.
+
+### Read search or quote
+
+```http
+GET /api/flights/searches/{search_id}
+GET /api/quotes/{quote_id}
+```
+
+Both return only a resource owned by the asserted customer. A quote includes at least `id`, `status`, `total_amount`, and `currency`, plus stored quote details.
+
+### Revalidate a quote
+
+```http
+POST /api/quotes/{quote_id}/revalidate
+```
+
+Body is optional in meaning but must be valid JSON; send `{}` or a positive integer version:
+
+```json
+{"version":2}
+```
+
+The provider validates the saved quote details. The API updates the quote to `ACTIVE`, replaces its details, and increments its version.
+
+## Bookings and installments
+
+### Create a booking
+
+```http
+POST /api/bookings
+```
+
+```bash
+curl -X POST "$TRIPKOPA_URL/api/bookings" \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: $TRIPKOPA_API_KEY" \
+  -H "X-WhatsApp-Number: $CUSTOMER_WHATSAPP" \
+  --data '{
+    "quote_id":"quote-uuid",
+    "booking_type":"flexible",
+    "passengers":[{
+      "title":"MR",
+      "first_name":"John",
+      "last_name":"Doe",
+      "date_of_birth":"1990-01-01"
+    }],
+    "terms_accepted":true,
+    "payment_preference":"flexible"
+  }'
+```
+
+`booking_type` must be `full` or `flexible`; `passengers` must contain at least one object. `terms_accepted` defaults to `false`. The initial status is `AWAITING_PAYMENT` when terms are accepted and `AWAITING_TERMS` otherwise. Returns `201`.
+
+### Read booking data
+
+```http
+GET /api/bookings/{booking_id}
+GET /api/bookings/{booking_id}/itinerary
+GET /api/bookings/{booking_id}/repayment
+GET /api/installments/{installment_id}
+```
+
+The itinerary response contains `booking_id`, `release_level`, `segments`, and possibly `ticket_reference`. The repayment response is:
+
+```json
+{
+  "booking_id": "booking-uuid",
+  "installments": [
+    {
+      "id": "installment-uuid",
+      "sequence_number": 1,
+      "due_date": "2026-08-20",
+      "amount": "25000.00",
+      "paid_amount": "0.00",
+      "status": "PENDING"
+    }
+  ]
+}
+```
+
+## Wallet, payments, and events
+
+### Read wallet and ledger
+
+```http
+GET /api/wallet
+GET /api/wallet/ledger
+```
+
+Wallet response:
+
+```json
+{
+  "customer_id": "customer-uuid",
+  "currency": "NGN",
+  "balance": "5000.00",
+  "virtual_account": {
+    "id": "account-uuid",
+    "account_number": "0123456789",
+    "account_name": "JOHN DOE",
+    "bank_name": "Providus Bank",
+    "status": "ACTIVE"
+  }
+}
+```
+
+`virtual_account` is `null` before successful KYC/provisioning. The ledger endpoint returns `{ "entries": [...], "total": 0 }`, ordered newest first.
+
+### Create payment instructions
+
+```http
+POST /api/payments/intents
+Idempotency-Key: <unique key, 1-200 characters>
+```
+
+This currently creates Providus bank-transfer instructions and only supports `NGN`. The customer must already have an active virtual account. Use a new idempotency key for each logical payment attempt; retrying the same operation with the same key returns the existing payment instead of creating another.
+
+```bash
+curl -X POST "$TRIPKOPA_URL/api/payments/intents" \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: $TRIPKOPA_API_KEY" \
+  -H "X-WhatsApp-Number: $CUSTOMER_WHATSAPP" \
+  -H 'Idempotency-Key: whatsapp-message-12345-wallet-deposit' \
+  --data '{
+    "amount":5000,
+    "currency":"NGN",
+    "payment_type":"wallet_deposit"
+  }'
+```
+
+Fields:
+
+| Field | Required | Rule/default |
+|---|---|---|
+| `booking_id` | No | Must belong to this customer if supplied |
+| `amount` | Yes | Positive number |
+| `currency` | No | Three characters, default `NGN`; currently only exact `NGN` is accepted |
+| `email` | No | Valid email; accepted but not currently used by the handler |
+| `payment_type` | No | Default `booking`; use values such as `wallet_deposit` as agreed by the caller |
+
+Successful creation returns `201` with the payment, `payment_method: "BANK_TRANSFER"`, and `virtual_account`. The new payment status is `PENDING`.
+
+### Read a payment
+
+```http
+GET /api/payments/{payment_id}
+```
+
+Returns the customer-owned payment record, including `id`, `status`, `amount`, `currency`, provider fields, and metadata.
+
+### Request a refund
+
+```http
+POST /api/payments/{payment_id}/refunds
+```
+
+```json
+{
+  "amount": 1000,
+  "reason": "Customer requested cancellation"
+}
+```
+
+`amount` must be positive; `reason` is optional and at most 500 characters. Returns `201` with a `PENDING` refund. The current handler records the request but does not itself call a payment provider or enforce that the refund is no greater than the payment.
+
+### Read customer events
+
+```http
+GET /api/events
+```
+
+Returns events newest first:
+
+```json
+{"events":[...],"total":1}
+```
+
+## Authentication API
+
+These routes support the cookie-authenticated staff/operations UI. They are separate from Agent authentication.
+
+### Sign up
+
+```http
+POST /api/auth/signup
+```
+
+```json
+{
+  "email": "operator@example.com",
+  "password": "at-least-8-characters"
+}
+```
+
+The schema also accepts optional `whatsapp_number` and `role`, but the current handler does not persist or apply them. Returns `201` with `{ "user": ..., "session": ... }`; `session` may be `null` when Supabase email confirmation is enabled.
+
+### Login, refresh, current user, and logout
+
+```http
+POST /api/auth/login
+{"email":"operator@example.com","password":"your-password"}
+
+POST /api/auth/refresh
+{"refresh_token":"supabase-refresh-token"}
+
+GET /api/auth/me
+
+POST /api/auth/logout
+```
+
+Login and refresh return `{ "user": ..., "session": ... }`. Current-user returns `{ "user": ..., "customer": ... }`. Logout returns `204` with no body.
+
+### Password reset
+
+```http
+POST /api/auth/password-reset
+{"email":"operator@example.com"}
+```
+
+Returns `{ "sent": true }` after asking Supabase to send the email.
+
+```http
+POST /api/auth/password-reset/confirm
+```
+
+```json
+{
+  "access_token": "token-from-reset-flow",
+  "refresh_token": "token-from-reset-flow",
+  "password": "new-password-at-least-8-characters"
+}
+```
+
+Returns `{ "updated": true }`.
+
+## Operations API
+
+Retain the Supabase auth cookies created by login.
+
+### List bookings and reconciliation records
+
+```http
+GET /api/operations/bookings
+GET /api/operations/reconciliation
+```
+
+Responses are `{ "bookings": [...], "total": n }` and `{ "records": [...], "total": n }`, respectively, ordered newest first.
+
+### Request booking cancellation
+
+```http
+POST /api/operations/bookings/{booking_id}/cancel
+```
+
+```json
+{"reason":"Flight no longer required"}
+```
+
+The reason is required and limited to 500 characters. The handler changes the booking status to `CANCELLATION_PENDING` and echoes the reason in the response. It does not persist the reason in the booking update.
+
+### Resolve a booking/case
+
+```http
+POST /api/operations/bookings/{booking_id}/resolve
+```
+
+```json
+{"reason":"Manual ticketing issue resolved"}
+```
+
+The reason is required and limited to 500 characters. This endpoint checks the operations role, marks the record `RESOLVED`, saves resolution metadata, and uses optimistic locking. A concurrent or repeated resolution returns `409`.
+
+## Provider webhooks
+
+Webhook callers must sign the exact raw request body. Do not parse and reserialize the JSON between generating the signature and sending it.
+
+### OneCap deposit webhook
+
+```http
+POST /api/webhooks/payments/onecap
+X-Partner-Signature: <hex HMAC-SHA256 of raw body>
+```
+
+The key is `ONECAP_PARTNER_WEBHOOK_SECRET`. The optional `sha256=` prefix is accepted.
+
+Required payload:
+
+```json
+{
+  "event": "deposit.success",
+  "data": {
+    "account_number": "0123456789",
+    "amount": 5000,
+    "reference": "provider-reference",
+    "session_id": "provider-event-id",
+    "timestamp": "2026-08-11T12:00:00.000Z",
+    "currency": "NGN",
+    "user": {"email":"customer@example.com"}
+  }
+}
+```
+
+`user` is optional. The callback is processed atomically and deduplicated using `session_id`. Success returns `{ "received": true, "payment_id": "..." }`; an unknown account returns `422`.
+
+### Paystack webhook
+
+```http
+POST /api/webhooks/payments/paystack
+X-Paystack-Signature: <hex HMAC-SHA512 of raw body>
+```
+
+The key is `PAYSTACK_SECRET_KEY`. Any JSON object is accepted and stored as a received provider event. Success returns `{ "received": true }`.
+
+### QoreID webhook
+
+```http
+POST /api/webhooks/kyc/qoreid
+X-Verifyme-Signature: <provider signature>
+```
+
+`X-Qoreid-Signature` and `X-Webhook-Signature` are also accepted. The signature is verified by the configured QoreID service. The API removes common raw identity/document fields before storing the event. Success returns `{ "received": true }`; a duplicate also includes `"duplicate": true`.
+
+## Calling from TypeScript
+
+For calls from another backend service, use an absolute URL and keep the Agent API key on the server:
+
+```ts
+const baseUrl = process.env.TRIPKOPA_URL ?? "http://localhost:3000";
+
+const response = await fetch(`${baseUrl}/api/flights/searches`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "X-API-Key": process.env.WHATSAPP_AGENT_API_SECRET!,
+    "X-WhatsApp-Number": "+2348012345678",
+  },
+  body: JSON.stringify({
+    origin: "LOS",
+    destination: "ABV",
+    departure_date: "2026-09-15",
+    trip_type: "one_way",
+    passenger_count: 1,
+    cabin_class: "Economy",
+    payment_preference: "full",
+  }),
+});
+
+const data = await response.json();
+if (!response.ok) {
+  throw new Error(data.error ?? `Tripkopa returned ${response.status}`);
+}
+```
+
+The repository also includes typed wrappers in `lib/api/client.ts`, but they currently use relative URLs. A browser can resolve those URLs, but Agent helpers must not be called there because doing so would expose the API secret. To use the wrappers safely in another server process, update their request helper to prepend the Tripkopa base URL.
+
+No cross-origin CORS headers are currently configured, so direct calls from a different browser origin require additional CORS configuration.

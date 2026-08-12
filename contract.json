@@ -1,0 +1,1194 @@
+{
+  "version": 1,
+  "generated_by": "backend_agent._generate_endpoint_plan",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/auth/signup",
+      "purpose": "",
+      "auth": "public",
+      "request_schema_name": "SignupInput",
+      "response_schema_name": "AuthSession",
+      "handler_file": "app/api/auth/signup/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "purpose": "",
+      "auth": "public",
+      "request_schema_name": "SigninInput",
+      "response_schema_name": "AuthSession",
+      "handler_file": "app/api/auth/login/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "purpose": "",
+      "auth": "public",
+      "request_schema_name": "RefreshTokenInput",
+      "response_schema_name": "AuthSession",
+      "handler_file": "app/api/auth/refresh/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "purpose": "",
+      "auth": "public",
+      "request_schema_name": null,
+      "response_schema_name": null,
+      "handler_file": "app/api/auth/logout/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/password-reset",
+      "purpose": "",
+      "auth": "public",
+      "request_schema_name": "PasswordResetRequest",
+      "response_schema_name": null,
+      "handler_file": "app/api/auth/password-reset/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/password-reset/confirm",
+      "purpose": "",
+      "auth": "public",
+      "request_schema_name": "PasswordResetConfirmation",
+      "response_schema_name": null,
+      "handler_file": "app/api/auth/password-reset/confirm/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "purpose": "Return the cookie-authenticated staff user used by the operations UI.",
+      "auth": "staff_session",
+      "request_schema_name": null,
+      "response_schema_name": "CurrentUser",
+      "handler_file": "app/api/auth/me/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/me",
+      "purpose": "Resolve or create the customer asserted by the trusted WhatsApp agent.",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "CustomerProfile",
+      "handler_file": "app/api/me/route.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/me",
+      "purpose": "Update non-verified profile fields for the asserted WhatsApp customer.",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": "CustomerProfileUpdate",
+      "response_schema_name": "CustomerProfile",
+      "handler_file": "app/api/me/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/kyc/sessions",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": "KycSessionCreateInput",
+      "response_schema_name": "KycSession",
+      "handler_file": "app/api/kyc/sessions/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/kyc/sessions/exchange",
+      "purpose": "",
+      "auth": "one_time_kyc_token",
+      "request_schema_name": "KycTokenExchangeInput",
+      "response_schema_name": "KycBrowserSession",
+      "handler_file": "app/api/kyc/sessions/exchange/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/kyc/sessions/[session_id]",
+      "purpose": "",
+      "auth": "agent_identity_or_kyc_browser_session",
+      "request_schema_name": null,
+      "response_schema_name": "KycSession",
+      "handler_file": "app/api/kyc/sessions/[session_id]/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/kyc",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "KycStatus",
+      "handler_file": "app/api/me/kyc/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/flights/searches",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": "FlightSearchInput",
+      "response_schema_name": "FlightSearch",
+      "handler_file": "app/api/flights/searches/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/flights/searches/[search_id]",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "FlightSearch",
+      "handler_file": "app/api/flights/searches/[search_id]/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quotes/[quote_id]",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "Quote",
+      "handler_file": "app/api/quotes/[quote_id]/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/quotes/[quote_id]/revalidate",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": "QuoteRevalidationInput",
+      "response_schema_name": "Quote",
+      "handler_file": "app/api/quotes/[quote_id]/revalidate/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/bookings",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": "BookingCreateInput",
+      "response_schema_name": "Booking",
+      "handler_file": "app/api/bookings/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookings/[booking_id]",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "Booking",
+      "handler_file": "app/api/bookings/[booking_id]/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookings/[booking_id]/itinerary",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "Itinerary",
+      "handler_file": "app/api/bookings/[booking_id]/itinerary/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookings/[booking_id]/repayment",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "RepaymentSchedule",
+      "handler_file": "app/api/bookings/[booking_id]/repayment/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "Wallet",
+      "handler_file": "app/api/wallet/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet/ledger",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "LedgerEntryList",
+      "handler_file": "app/api/wallet/ledger/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payments/intents",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": "PaymentIntentCreateInput",
+      "response_schema_name": "PaymentIntent",
+      "handler_file": "app/api/payments/intents/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/payments/[payment_id]",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "Payment",
+      "handler_file": "app/api/payments/[payment_id]/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payments/[payment_id]/refunds",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": "RefundCreateInput",
+      "response_schema_name": "Refund",
+      "handler_file": "app/api/payments/[payment_id]/refunds/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/installments/[installment_id]",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "Installment",
+      "handler_file": "app/api/installments/[installment_id]/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhooks/payments/paystack",
+      "purpose": "",
+      "auth": "public",
+      "request_schema_name": "PaystackWebhookInput",
+      "response_schema_name": null,
+      "handler_file": "app/api/webhooks/payments/paystack/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhooks/kyc/qoreid",
+      "purpose": "",
+      "auth": "public",
+      "request_schema_name": "QoreidWebhookInput",
+      "response_schema_name": null,
+      "handler_file": "app/api/webhooks/kyc/qoreid/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/operations/bookings",
+      "purpose": "",
+      "auth": "admin",
+      "request_schema_name": null,
+      "response_schema_name": "OperationsBookingList",
+      "handler_file": "app/api/operations/bookings/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/operations/bookings/[booking_id]/cancel",
+      "purpose": "",
+      "auth": "admin",
+      "request_schema_name": "BookingCancellationInput",
+      "response_schema_name": "Booking",
+      "handler_file": "app/api/operations/bookings/[booking_id]/cancel/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/operations/reconciliation",
+      "purpose": "",
+      "auth": "admin",
+      "request_schema_name": null,
+      "response_schema_name": "ReconciliationReport",
+      "handler_file": "app/api/operations/reconciliation/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/events",
+      "purpose": "",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "OperationalEventList",
+      "handler_file": "app/api/events/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/operations/bookings/[booking_id]/resolve",
+      "purpose": "Allow authenticated operations staff to mark an operational booking/case resolved, updating its status with optimistic locking semantics suitable for the operations dashboard.",
+      "auth": "authenticated",
+      "request_schema_name": null,
+      "response_schema_name": null,
+      "handler_file": "app/api/operations/bookings/[booking_id]/resolve/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/kyc/sessions/[session_id]/consent",
+      "purpose": "Record consent for a KYC verification session and initiate/open the configured identity verification provider flow after the user accepts the privacy notice. The endpoint should validate session ownership, consent timestamp, and return the provider launch state or URL.",
+      "auth": "agent_identity_or_kyc_browser_session",
+      "request_schema_name": null,
+      "response_schema_name": null,
+      "handler_file": "app/api/kyc/sessions/[session_id]/consent/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/kyc/sessions/[session_id]/verify-bvn",
+      "purpose": "Verify a transient BVN through QoreID and provision the customer's OneCap-proxied Providus virtual account without persisting the BVN.",
+      "auth": "kyc_browser_session",
+      "request_schema_name": "BvnVerificationInput",
+      "response_schema_name": "VirtualAccount",
+      "handler_file": "app/api/kyc/sessions/[session_id]/verify-bvn/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhooks/payments/onecap",
+      "purpose": "Verify and atomically process signed OneCap Providus deposit callbacks.",
+      "auth": "hmac_sha256_webhook_signature",
+      "request_schema_name": "OneCapDepositWebhookInput",
+      "response_schema_name": null,
+      "handler_file": "app/api/webhooks/payments/onecap/route.ts"
+    }
+  ],
+  "entities": [
+    {
+      "name": "virtual_accounts",
+      "columns": [
+        { "name": "customer_id", "type": "uuid", "required": true },
+        { "name": "provider", "type": "text", "required": true },
+        { "name": "account_number", "type": "text", "required": false },
+        { "name": "account_name", "type": "text", "required": false },
+        { "name": "bank_name", "type": "text", "required": false },
+        { "name": "status", "type": "text", "required": true },
+        { "name": "provider_payload", "type": "jsonb", "required": false }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "trusted_agent_customer_context",
+      "write_scope": "service_role",
+      "relations": [
+        { "column": "customer_id", "references": "customers" }
+      ]
+    },
+    {
+      "name": "staff_profiles",
+      "columns": [
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "role",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "owner_column": "user_id",
+      "read_scope": "owner",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "user_id",
+          "references": "auth.users"
+        }
+      ]
+    },
+    {
+      "name": "customers",
+      "columns": [
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "required": false
+        },
+        {
+          "name": "whatsapp_number",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "first_name",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "middle_name",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "last_name",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "date_of_birth",
+          "type": "date",
+          "required": false
+        },
+        {
+          "name": "gender",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "preferred_currency",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "profile_completed_at",
+          "type": "timestamptz",
+          "required": false
+        }
+      ],
+      "owner_column": "id",
+      "read_scope": "trusted_agent_customer_context",
+      "write_scope": "trusted_agent_customer_context",
+      "relations": []
+    },
+    {
+      "name": "kyc_sessions",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "provider",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "provider_reference",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "token_hash",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "required": true
+        },
+        {
+          "name": "used_at",
+          "type": "timestamptz",
+          "required": false
+        },
+        {
+          "name": "normalized_result",
+          "type": "jsonb",
+          "required": false
+        }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "owner",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "customer_id",
+          "references": "customers"
+        }
+      ]
+    },
+    {
+      "name": "flight_searches",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "origin",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "destination",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "departure_date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "return_date",
+          "type": "date",
+          "required": false
+        },
+        {
+          "name": "trip_type",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "passenger_count",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "cabin_class",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "results",
+          "type": "jsonb",
+          "required": true
+        }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "owner",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "customer_id",
+          "references": "customers"
+        }
+      ]
+    },
+    {
+      "name": "quotes",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "search_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "provider",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "provider_reference",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "currency",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "base_amount",
+          "type": "numeric",
+          "required": true
+        },
+        {
+          "name": "total_amount",
+          "type": "numeric",
+          "required": true
+        },
+        {
+          "name": "deposit_amount",
+          "type": "numeric",
+          "required": false
+        },
+        {
+          "name": "installment_amount",
+          "type": "numeric",
+          "required": false
+        },
+        {
+          "name": "rule_version",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "required": true
+        },
+        {
+          "name": "details",
+          "type": "jsonb",
+          "required": true
+        }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "owner",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "customer_id",
+          "references": "customers"
+        },
+        {
+          "column": "search_id",
+          "references": "flight_searches"
+        }
+      ]
+    },
+    {
+      "name": "bookings",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "quote_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "booking_type",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "provider_reference",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "currency",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "total_amount",
+          "type": "numeric",
+          "required": true
+        },
+        {
+          "name": "deposit_amount",
+          "type": "numeric",
+          "required": false
+        },
+        {
+          "name": "amount_paid",
+          "type": "numeric",
+          "required": true
+        },
+        {
+          "name": "balance_amount",
+          "type": "numeric",
+          "required": true
+        },
+        {
+          "name": "rule_version",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "passengers",
+          "type": "jsonb",
+          "required": true
+        },
+        {
+          "name": "flight_details",
+          "type": "jsonb",
+          "required": true
+        }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "owner",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "customer_id",
+          "references": "customers"
+        },
+        {
+          "column": "quote_id",
+          "references": "quotes"
+        }
+      ]
+    },
+    {
+      "name": "wallets",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "currency",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "balance",
+          "type": "numeric",
+          "required": true,
+          "default": "0"
+        }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "owner",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "customer_id",
+          "references": "customers"
+        }
+      ]
+    },
+    {
+      "name": "ledger_entries",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "wallet_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "payment_id",
+          "type": "uuid",
+          "required": false
+        },
+        {
+          "name": "booking_id",
+          "type": "uuid",
+          "required": false
+        },
+        {
+          "name": "entry_type",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "amount",
+          "type": "numeric",
+          "required": true
+        },
+        {
+          "name": "currency",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "owner",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "customer_id",
+          "references": "customers"
+        },
+        {
+          "column": "wallet_id",
+          "references": "wallets"
+        },
+        {
+          "column": "payment_id",
+          "references": "payments"
+        },
+        {
+          "column": "booking_id",
+          "references": "bookings"
+        }
+      ]
+    },
+    {
+      "name": "payments",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "booking_id",
+          "type": "uuid",
+          "required": false
+        },
+        {
+          "name": "provider",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "provider_reference",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "payment_type",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "amount",
+          "type": "numeric",
+          "required": true
+        },
+        {
+          "name": "currency",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "checkout_url",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "metadata",
+          "type": "jsonb",
+          "required": false
+        }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "owner",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "customer_id",
+          "references": "customers"
+        },
+        {
+          "column": "booking_id",
+          "references": "bookings"
+        }
+      ]
+    },
+    {
+      "name": "refunds",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "payment_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "booking_id",
+          "type": "uuid",
+          "required": false
+        },
+        {
+          "name": "provider_reference",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "amount",
+          "type": "numeric",
+          "required": true
+        },
+        {
+          "name": "currency",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "owner",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "customer_id",
+          "references": "customers"
+        },
+        {
+          "column": "payment_id",
+          "references": "payments"
+        },
+        {
+          "column": "booking_id",
+          "references": "bookings"
+        }
+      ]
+    },
+    {
+      "name": "installments",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "booking_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "sequence_number",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "due_date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "amount",
+          "type": "numeric",
+          "required": true
+        },
+        {
+          "name": "paid_amount",
+          "type": "numeric",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "owner",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "customer_id",
+          "references": "customers"
+        },
+        {
+          "column": "booking_id",
+          "references": "bookings"
+        }
+      ]
+    },
+    {
+      "name": "itineraries",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "booking_id",
+          "type": "uuid",
+          "required": true
+        },
+        {
+          "name": "release_level",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "segments",
+          "type": "jsonb",
+          "required": true
+        },
+        {
+          "name": "ticket_reference",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "owner",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "customer_id",
+          "references": "customers"
+        },
+        {
+          "column": "booking_id",
+          "references": "bookings"
+        }
+      ]
+    },
+    {
+      "name": "provider_webhooks",
+      "columns": [
+        {
+          "name": "provider",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "event_type",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "provider_event_id",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "payload",
+          "type": "jsonb",
+          "required": true
+        },
+        {
+          "name": "processing_status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "processed_at",
+          "type": "timestamptz",
+          "required": false
+        }
+      ],
+      "owner_column": null,
+      "read_scope": "authenticated",
+      "write_scope": "authenticated",
+      "relations": []
+    },
+    {
+      "name": "operational_events",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "required": false
+        },
+        {
+          "name": "booking_id",
+          "type": "uuid",
+          "required": false
+        },
+        {
+          "name": "event_type",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "payload",
+          "type": "jsonb",
+          "required": true
+        },
+        {
+          "name": "delivered_at",
+          "type": "timestamptz",
+          "required": false
+        }
+      ],
+      "owner_column": "customer_id",
+      "read_scope": "authenticated",
+      "write_scope": "owner",
+      "relations": [
+        {
+          "column": "customer_id",
+          "references": "customers"
+        },
+        {
+          "column": "booking_id",
+          "references": "bookings"
+        }
+      ]
+    },
+    {
+      "name": "reconciliation_records",
+      "columns": [
+        {
+          "name": "provider",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "payment_id",
+          "type": "uuid",
+          "required": false
+        },
+        {
+          "name": "provider_reference",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "difference",
+          "type": "numeric",
+          "required": false
+        },
+        {
+          "name": "details",
+          "type": "jsonb",
+          "required": false
+        }
+      ],
+      "owner_column": null,
+      "read_scope": "authenticated",
+      "write_scope": "authenticated",
+      "relations": [
+        {
+          "column": "payment_id",
+          "references": "payments"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+import { NextResponse } from "next/server"; import { requireAuth } from "@/lib/auth/server"; import { failure } from "@/lib/api-utils";
+export async function GET(){try{const {supabase}=await requireAuth();const {data,error}=await supabase.from("reconciliation_records").select("*").order("created_at",{ascending:false});if(error)throw error;return NextResponse.json({records:data||[],total:data?.length||0});}catch(e){return failure(e)}}
