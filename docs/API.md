@@ -117,6 +117,7 @@ Many records come directly from Postgres. Decimal amount fields may therefore be
 | `POST` | `/api/kyc/sessions/{session_id}/verify-bvn` | KYC | Verify BVN and provision a virtual account |
 | `POST` | `/api/flights/searches` | Agent | Search for flights and store the result |
 | `GET` | `/api/flights/searches/{search_id}` | Agent | Read a stored flight search |
+| `POST` | `/api/quotes` | Agent | Create a full or flexible quote from a stored search offer |
 | `GET` | `/api/quotes/{quote_id}` | Agent | Read a customer quote |
 | `POST` | `/api/quotes/{quote_id}/revalidate` | Agent | Revalidate and version a quote |
 | `POST` | `/api/bookings` | Agent | Create a booking from a quote |
@@ -365,7 +366,71 @@ Rules and defaults:
 | `cabin_class` | No | Default `Economy` |
 | `payment_preference` | No | `full` (default) or `flexible` |
 
-Returns `201` with a stored search record whose `results` field contains the provider response.
+Returns `201` with a stored search record whose `results` field contains the provider response. The caller should let the customer choose one offer from this response, then create a quote.
+
+### Create a quote
+
+```http
+POST /api/quotes
+```
+
+Creates a full-payment or flexible-payment quote from a stored flight search. Flexible quotes require latest KYC status `VERIFIED`.
+
+```bash
+curl -X POST "$TRIPKOPA_URL/api/quotes" \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: $TRIPKOPA_API_KEY" \
+  -H "X-WhatsApp-Number: $CUSTOMER_WHATSAPP" \
+  --data '{
+    "search_id":"search-uuid",
+    "booking_type":"flexible",
+    "offer_index":0,
+    "base_amount":120000,
+    "currency":"NGN",
+    "installment_count":4
+  }'
+```
+
+Fields:
+
+| Field | Required | Rule/default |
+|---|---|---|
+| `search_id` | Yes | Stored flight search owned by this customer |
+| `booking_type` | No | `full` default, or `flexible` |
+| `offer_index` | No | Zero-based offer index from the provider response; default `0` |
+| `offer` | No | Explicit selected offer object; used instead of `offer_index` when supplied |
+| `base_amount` | Sometimes | Positive number; required when the backend cannot infer price from the offer |
+| `currency` | No | Three-letter code, default `NGN` |
+| `installment_count` | No | Positive integer up to `8`; capped by MVP route rules |
+
+Full-payment quotes apply a 5% MVP service fee. Flexible quotes apply MVP markup/deposit rules, save a versioned repayment plan under `details.pricing.repayment_plan`, and return a `quote` with fields such as:
+
+```json
+{
+  "id": "quote-uuid",
+  "status": "ACTIVE",
+  "currency": "NGN",
+  "base_amount": "120000",
+  "total_amount": "129000",
+  "deposit_amount": "38700",
+  "installment_amount": "22575",
+  "rule_version": "flex_mvp_2026_08",
+  "expires_at": "2026-08-12T12:10:00.000Z",
+  "details": {
+    "booking_type": "flexible",
+    "pricing": {
+      "repayment_plan": {
+        "deposit_amount": 38700,
+        "installments": [
+          {"sequence_number":1,"due_date":"2026-08-19","amount":22575}
+        ]
+      }
+    }
+  }
+}
+```
+
+Quotes expire after 10 minutes.
 
 ### Read search or quote
 
@@ -374,7 +439,7 @@ GET /api/flights/searches/{search_id}
 GET /api/quotes/{quote_id}
 ```
 
-Both return only a resource owned by the asserted customer. A quote includes at least `id`, `status`, `total_amount`, and `currency`, plus stored quote details.
+Both return only a resource owned by the asserted customer. A quote includes at least `id`, `status`, `total_amount`, and `currency`, plus stored quote details and any repayment plan.
 
 ### Revalidate a quote
 
@@ -417,7 +482,16 @@ curl -X POST "$TRIPKOPA_URL/api/bookings" \
   }'
 ```
 
-`booking_type` must be `full` or `flexible`; `passengers` must contain at least one object. `terms_accepted` defaults to `false`. The initial status is `AWAITING_PAYMENT` when terms are accepted and `AWAITING_TERMS` otherwise. Returns `201`.
+`booking_type` must be `full` or `flexible`; `passengers` must contain at least one object. `terms_accepted` defaults to `false`.
+
+When terms are accepted:
+
+| Booking type | Initial status | Side effects |
+|---|---|---|
+| `full` | `AWAITING_PAYMENT` | Consumes the quote |
+| `flexible` | `AWAITING_DEPOSIT` | Consumes the quote and creates installment rows from the quote repayment plan |
+
+When terms are not accepted, the initial status is `AWAITING_TERMS`. A flexible booking requires a flexible quote containing `details.pricing.repayment_plan`. Returns `201`.
 
 ### Read booking data
 
@@ -504,9 +578,27 @@ Fields:
 | `amount` | Yes | Positive number |
 | `currency` | No | Three characters, default `NGN`; currently only exact `NGN` is accepted |
 | `email` | No | Valid email; accepted but not currently used by the handler |
-| `payment_type` | No | Default `booking`; use values such as `wallet_deposit` as agreed by the caller |
+| `payment_type` | No | Default `booking`; use `wallet_deposit`, `booking_deposit`, `installment`, or another agreed internal value |
 
-Successful creation returns `201` with the payment, `payment_method: "BANK_TRANSFER"`, and `virtual_account`. The new payment status is `PENDING`.
+For booking payments, the amount must not exceed the booking `balance_amount`. For flexible bookings in `AWAITING_DEPOSIT` or `AWAITING_PAYMENT`, the amount must be at least the booking `deposit_amount`.
+
+Flexible deposit example:
+
+```bash
+curl -X POST "$TRIPKOPA_URL/api/payments/intents" \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: $TRIPKOPA_API_KEY" \
+  -H "X-WhatsApp-Number: $CUSTOMER_WHATSAPP" \
+  -H 'Idempotency-Key: booking-uuid-deposit-v1' \
+  --data '{
+    "booking_id":"booking-uuid",
+    "amount":38700,
+    "currency":"NGN",
+    "payment_type":"booking_deposit"
+  }'
+```
+
+Successful creation returns `201` with the payment, `payment_method: "BANK_TRANSFER"`, and `virtual_account`. The new payment status is `PENDING`. The customer pays by bank transfer to the returned virtual account.
 
 ### Read a payment
 
@@ -668,7 +760,33 @@ Required payload:
 }
 ```
 
-`user` is optional. The callback is processed atomically and deduplicated using `session_id`. Success returns `{ "received": true, "payment_id": "..." }`; an unknown account returns `422`.
+`user` is optional. The callback is processed atomically and deduplicated using `session_id`. It records the provider event, marks or creates a succeeded payment, inserts wallet deposit ledger entries, and credits the customer wallet.
+
+If the matched payment has a `booking_id`, the webhook also applies the payment to that booking:
+
+- debits the wallet into booking receivables;
+- updates `bookings.amount_paid`, `bookings.balance_amount`, and booking status;
+- marks flexible installments `PARTIALLY_PAID` or `PAID` when installment money is received after the deposit;
+- attempts TakeTrips ordering/ticketing once the full-payment amount or flexible deposit threshold is met;
+- creates an itinerary with `release_level: "FULL"` for full-payment bookings or `"LIMITED"` for flexible bookings;
+- moves failed ticketing attempts to `MANUAL_REVIEW` and emits an operational event.
+
+Success returns:
+
+```json
+{
+  "received": true,
+  "payment_id": "payment-uuid",
+  "booking": {
+    "applied": true,
+    "booking_id": "booking-uuid",
+    "status": "PAYMENT_RECEIVED",
+    "ticketing": {"ticketed": true, "release_level": "LIMITED"}
+  }
+}
+```
+
+For development/provider testing, set `TAKETRIPS_MOCK_ORDER_SUCCESS=true` to skip the real TakeTrips order call and create a mock ticket reference. An unknown virtual account returns `422`.
 
 ### Paystack webhook
 

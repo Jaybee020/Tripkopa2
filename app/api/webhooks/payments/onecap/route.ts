@@ -4,6 +4,7 @@ import { z } from "zod";
 import { OneCapDepositWebhookInput } from "@/lib/api-contracts";
 import { supabase } from "@/lib/services/supabase";
 import { bad, failure } from "@/lib/api-utils";
+import { applyBookingPayment } from "@/lib/booking-payments";
 
 function validSignature(raw: string, providedHeader: string | null) {
   const secret = process.env.ONECAP_PARTNER_WEBHOOK_SECRET;
@@ -48,9 +49,11 @@ export async function POST(request: Request) {
       }
       throw error;
     }
-    return NextResponse.json({ received: true, payment_id: paymentId });
+    const booking = paymentId
+      ? await applyBookingPayment(String(paymentId))
+      : { applied: false, reason: "no_payment_id" };
+    return NextResponse.json({ received: true, payment_id: paymentId, booking });
   } catch (error) {
     return error instanceof z.ZodError ? bad(error) : failure(error);
   }
 }
-

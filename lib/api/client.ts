@@ -5,7 +5,7 @@
 // pages and IntegrationAgent should import from here instead of
 // rolling their own fetch() calls.
 
-import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingList, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteRevalidationInput, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
+import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingList, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuoteRevalidationInput, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
@@ -105,6 +105,10 @@ export async function createFlightsSearches(context: AgentRequestContext, body: 
 
 export async function getFlightsSearchesBySearchId(context: AgentRequestContext, search_id: string): Promise<FlightSearch> {
   return request<FlightSearch>("GET", `/api/flights/searches/${search_id}`, undefined, agentHeaders(context));
+}
+
+export async function createQuotes(context: AgentRequestContext, body: QuoteCreateInput): Promise<Quote> {
+  return request<Quote>("POST", "/api/quotes", body, agentHeaders(context));
 }
 
 export async function getQuotesByQuoteId(context: AgentRequestContext, quote_id: string): Promise<Quote> {

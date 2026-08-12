@@ -33,6 +33,8 @@ ONECAP_PARTNER_API_KEY=partner-key-issued-to-tripkopa
 ONECAP_PARTNER_WEBHOOK_SECRET=independent-hmac-webhook-secret
 # Development/test only: bypass QoreID BVN verification with a synthetic success.
 QOREID_MOCK_BVN_SUCCESS=false
+# Development/test only: skip the real TakeTrips order call after booking payment.
+TAKETRIPS_MOCK_ORDER_SUCCESS=false
 ```
 
 The service-role key and agent secret must never be exposed in browser code or

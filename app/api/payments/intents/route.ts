@@ -4,6 +4,10 @@ import { PaymentIntentCreateInput } from "@/lib/api-contracts";
 import { requireAgentCustomer } from "@/lib/auth/agent";
 import { bad, failure } from "@/lib/api-utils";
 
+function money(value: number | string | null | undefined) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
 export async function POST(request: Request) {
   try {
     const input = PaymentIntentCreateInput.parse(await request.json());
@@ -46,10 +50,11 @@ export async function POST(request: Request) {
       );
     }
 
+    let bookingMetadata: Record<string, unknown> = {};
     if (input.booking_id) {
       const { data: booking, error: bookingError } = await supabase
         .from("bookings")
-        .select("id")
+        .select("id,booking_type,status,total_amount,deposit_amount,balance_amount")
         .eq("id", input.booking_id)
         .eq("customer_id", customer.id)
         .maybeSingle();
@@ -57,6 +62,32 @@ export async function POST(request: Request) {
       if (!booking) {
         return NextResponse.json({ error: "Booking not found" }, { status: 404 });
       }
+      if (["CANCELLED", "REFUNDED", "FAILED"].includes(booking.status)) {
+        return NextResponse.json(
+          { error: "Booking cannot accept payment" },
+          { status: 409 },
+        );
+      }
+      if (input.amount > money(booking.balance_amount)) {
+        return NextResponse.json(
+          { error: "Payment amount exceeds booking balance" },
+          { status: 400 },
+        );
+      }
+      if (
+        booking.booking_type === "flexible" &&
+        ["AWAITING_DEPOSIT", "AWAITING_PAYMENT"].includes(booking.status) &&
+        input.amount < money(booking.deposit_amount)
+      ) {
+        return NextResponse.json(
+          { error: "Payment amount is below the required deposit" },
+          { status: 400 },
+        );
+      }
+      bookingMetadata = {
+        booking_type: booking.booking_type,
+        booking_status_at_creation: booking.status,
+      };
     }
 
     const providerReference = `ocp_${crypto.randomUUID()}`;
@@ -72,7 +103,7 @@ export async function POST(request: Request) {
         currency: input.currency,
         status: "PENDING",
         idempotency_key: idempotencyKey,
-        metadata: { virtual_account_id: account.id },
+        metadata: { virtual_account_id: account.id, ...bookingMetadata },
       })
       .select("*")
       .single();
