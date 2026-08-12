@@ -15,6 +15,7 @@ import {
   createKycSessionsExchange,
   getKycSessionsBySessionId,
   postKycSessionsConsentBySessionId,
+  updateKycSessionProfile,
   verifyKycBvn,
 } from "@/lib/api/client";
 import type { KycBrowserSession, KycSession } from "@/lib/api-contracts";
@@ -41,6 +42,9 @@ export default function KycVerificationPage({
 }) {
   const [state, setState] = useState<KycState>("exchanging");
   const [consent, setConsent] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
   const [bvn, setBvn] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -111,8 +115,20 @@ export default function KycVerificationPage({
   }, [params]);
 
   const startVerification = async () => {
+    const normalizedFirstName = firstName.trim();
+    const normalizedLastName = lastName.trim();
+    const normalizedEmail = email.trim();
+
     if (!consent) {
       setNotice("Please confirm your consent before continuing.");
+      return;
+    }
+    if (!normalizedFirstName || !normalizedLastName) {
+      setNotice("Enter your first and last name.");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+      setNotice("Enter a valid email address.");
       return;
     }
     if (!/^\d{11}$/.test(bvn)) {
@@ -133,6 +149,11 @@ export default function KycVerificationPage({
     setState("launching");
     setNotice("");
     try {
+      await updateKycSessionProfile(sessionId, {
+        first_name: normalizedFirstName,
+        last_name: normalizedLastName,
+        email: normalizedEmail,
+      });
       await postKycSessionsConsentBySessionId(sessionId);
       await verifyKycBvn(sessionId, { bvn });
       setState("verified");
@@ -146,6 +167,9 @@ export default function KycVerificationPage({
 
   const reset = () => {
     setConsent(false);
+    setFirstName("");
+    setLastName("");
+    setEmail("");
     setNotice("");
     setError("");
     setState("expired");
@@ -332,9 +356,51 @@ export default function KycVerificationPage({
                     described above.
                   </span>
                 </label>
+                <div className="kyc-field-grid">
+                  <label className="kyc-field">
+                    <span>First name</span>
+                    <input
+                      type="text"
+                      autoComplete="given-name"
+                      value={firstName}
+                      onChange={(event) => {
+                        setFirstName(event.target.value);
+                        setNotice("");
+                      }}
+                      placeholder="First name"
+                    />
+                  </label>
+                  <label className="kyc-field">
+                    <span>Last name</span>
+                    <input
+                      type="text"
+                      autoComplete="family-name"
+                      value={lastName}
+                      onChange={(event) => {
+                        setLastName(event.target.value);
+                        setNotice("");
+                      }}
+                      placeholder="Last name"
+                    />
+                  </label>
+                </div>
+                <label className="kyc-field">
+                  <span>Email address</span>
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      setNotice("");
+                    }}
+                    placeholder="you@example.com"
+                  />
+                </label>
                 <label className="kyc-field">
                   <span>Bank Verification Number</span>
                   <input
+                    className="kyc-bvn-input"
                     type="password"
                     inputMode="numeric"
                     autoComplete="off"
@@ -356,7 +422,13 @@ export default function KycVerificationPage({
                 <button
                   className="kyc-primary-button"
                   onClick={startVerification}
-                  disabled={!consent || bvn.length !== 11}
+                  disabled={
+                    !consent ||
+                    !firstName.trim() ||
+                    !lastName.trim() ||
+                    !email.trim() ||
+                    bvn.length !== 11
+                  }
                 >
                   Continue to verification <ChevronRight size={17} />
                 </button>

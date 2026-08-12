@@ -189,6 +189,10 @@ export async function postKycSessionsConsentBySessionId(session_id: string): Pro
   return request<unknown>("POST", `/api/kyc/sessions/${session_id}/consent`, { consent: true, privacy_notice_version: "1.0" });
 }
 
+export async function updateKycSessionProfile(session_id: string, body: Pick<CustomerProfileUpdate, "first_name" | "last_name" | "email">): Promise<CustomerProfile> {
+  return request<CustomerProfile>("PATCH", `/api/kyc/sessions/${session_id}/profile`, body);
+}
+
 export async function verifyKycBvn(session_id: string, body: BvnVerificationInput): Promise<{ status: string; virtual_account: VirtualAccount }> {
   return request<{ status: string; virtual_account: VirtualAccount }>("POST", `/api/kyc/sessions/${session_id}/verify-bvn`, body);
 }
