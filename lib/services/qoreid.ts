@@ -134,6 +134,14 @@ function normalizeHttpError(
   );
 }
 
+function normalizeNetworkError(operation: string, error: unknown): never {
+  throw new ServiceError(
+    `[${PROVIDER}] ${operation} request failed`,
+    PROVIDER,
+    error,
+  );
+}
+
 // ── Implementation ──────────────────────────────────────────────────────
 
 export class QoreIdService {
@@ -174,11 +182,16 @@ export class QoreIdService {
 
   private async fetchToken(): Promise<string> {
     const { clientId, secret, baseUrl } = this.getCredentials();
-    const res = await fetch(`${baseUrl}/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ clientId, secret }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${baseUrl}/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ clientId, secret }),
+      });
+    } catch (error) {
+      normalizeNetworkError("token", error);
+    }
 
     if (!res.ok) {
       let payload: QoreIdErrorPayload | string = "";
@@ -251,7 +264,11 @@ export class QoreIdService {
         init.body =
           typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body);
       }
-      return fetch(url, init);
+      try {
+        return await fetch(url, init);
+      } catch (error) {
+        normalizeNetworkError("api", error);
+      }
     };
 
     let res = await doFetch();

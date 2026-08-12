@@ -31,6 +31,8 @@ WHATSAPP_AGENT_API_SECRET=use-a-long-random-secret
 ONECAP_PARTNER_BASE_URL=https://onecap.example.com
 ONECAP_PARTNER_API_KEY=partner-key-issued-to-tripkopa
 ONECAP_PARTNER_WEBHOOK_SECRET=independent-hmac-webhook-secret
+# Development/test only: bypass QoreID BVN verification with a synthetic success.
+QOREID_MOCK_BVN_SUCCESS=false
 ```
 
 The service-role key and agent secret must never be exposed in browser code or
@@ -80,6 +82,11 @@ Tripkopa sends the BVN to QoreID and then OneCap within the same server request;
 the raw BVN is never written to the database, returned to SupaOS, or placed in a
 webhook payload. After successful verification, the Providus account is stored
 against the Tripkopa customer and returned by `GET /api/wallet`.
+
+For development or provider outage testing, set `QOREID_MOCK_BVN_SUCCESS=true`
+to return a synthetic successful QoreID BVN result. This still requires the
+normal KYC browser session, customer name/email, and OneCap virtual-account
+provisioning before the KYC session is marked `VERIFIED`.
 
 Payment instructions are created with:
 

@@ -22,6 +22,39 @@ type QoreIdBvnResult = {
   bvn?: { firstname?: string; lastname?: string; birthdate?: string; gender?: string };
 };
 
+type CustomerBvnProfile = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  date_of_birth?: string | null;
+  gender?: string | null;
+  whatsapp_number: string;
+};
+
+function safeErrorCause(error: unknown): Record<string, unknown> | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const cause = (error as Error & { cause?: unknown }).cause;
+  if (!(cause instanceof Error)) return undefined;
+  const metadata = cause as Error & {
+    code?: string;
+    errno?: number;
+    syscall?: string;
+    hostname?: string;
+    address?: string;
+    port?: number;
+  };
+  return {
+    name: cause.name,
+    message: cause.message,
+    code: metadata.code,
+    errno: metadata.errno,
+    syscall: metadata.syscall,
+    hostname: metadata.hostname,
+    address: metadata.address,
+    port: metadata.port,
+  };
+}
+
 function errorDetails(error: unknown) {
   if (!(error instanceof Error)) {
     return {
@@ -46,11 +79,13 @@ function errorDetails(error: unknown) {
     details: metadata.details,
     hint: metadata.hint,
     provider: metadata.provider,
+    cause: safeErrorCause(error),
     originalError:
       metadata.originalError instanceof Error
         ? {
             name: metadata.originalError.name,
             message: metadata.originalError.message,
+            cause: safeErrorCause(metadata.originalError),
           }
         : metadata.originalError
           ? "[redacted]"
@@ -68,6 +103,96 @@ function logBvnError(
     ...context,
     error: errorDetails(error),
   });
+}
+
+function mockBvnResult(
+  sessionId: string,
+  profile: CustomerBvnProfile,
+): QoreIdBvnResult {
+  return {
+    id: `mock-qoreid-bvn-${sessionId}`,
+    applicant: {
+      firstname: profile.first_name,
+      lastname: profile.last_name,
+    },
+    summary: {
+      bvn_check: {
+        status: "MATCH",
+      },
+    },
+    status: {
+      status: "verified",
+      state: "verified",
+    },
+    bvn: {
+      firstname: profile.first_name,
+      lastname: profile.last_name,
+      birthdate: profile.date_of_birth || undefined,
+      gender: profile.gender || undefined,
+    },
+  };
+}
+
+async function verifyBvn(
+  bvn: string,
+  sessionId: string,
+  profile: CustomerBvnProfile,
+  context: BvnLogContext,
+) {
+  if (process.env.QOREID_MOCK_BVN_SUCCESS === "true") {
+    console.info("[kyc.verify-bvn]", {
+      stage: "qoreid_mock_success",
+      ...context,
+      provider: "qoreid",
+    });
+    return mockBvnResult(sessionId, profile);
+  }
+
+  return qoreid.verifyBvnBasic<QoreIdBvnResult>(bvn, {
+    firstname: profile.first_name,
+    lastname: profile.last_name,
+    dob: profile.date_of_birth || undefined,
+    phone: profile.whatsapp_number,
+    email: profile.email,
+    gender: profile.gender || undefined,
+  });
+}
+
+function normalizedKycResult(result: QoreIdBvnResult, match?: string | null) {
+  return {
+    provider_verification_id: result.id ? String(result.id) : null,
+    status: "VERIFIED",
+    name_match: match || null,
+    verified_first_name: result.applicant?.firstname || result.bvn?.firstname || null,
+    verified_last_name: result.applicant?.lastname || result.bvn?.lastname || null,
+    verified_date_of_birth: result.bvn?.birthdate || null,
+    verified_gender: result.bvn?.gender || null,
+  };
+}
+
+function existingActiveAccountResult(
+  sessionId: string,
+  profile: CustomerBvnProfile,
+) {
+  return normalizedKycResult(
+    {
+      id: `existing-onecap-account-${sessionId}`,
+      applicant: {
+        firstname: profile.first_name,
+        lastname: profile.last_name,
+      },
+      summary: {
+        bvn_check: {
+          status: "ACCOUNT_ALREADY_ACTIVE",
+        },
+      },
+      status: {
+        status: "verified",
+        state: "verified",
+      },
+    },
+    "ACCOUNT_ALREADY_ACTIVE",
+  );
 }
 
 export async function POST(
@@ -107,6 +232,14 @@ export async function POST(
         { status: 409 },
       );
     }
+    const completeProfile: CustomerBvnProfile = {
+      first_name: profile.first_name,
+      last_name: profile.last_name,
+      email: profile.email,
+      date_of_birth: profile.date_of_birth,
+      gender: profile.gender,
+      whatsapp_number: profile.whatsapp_number,
+    };
 
     const { data: existing, error: existingError } = await supabase
       .from("virtual_accounts")
@@ -120,6 +253,23 @@ export async function POST(
     }
     if (existing?.id) context.account_id = existing.id;
     if (existing?.status === "ACTIVE") {
+      const existingAccountResult = existingActiveAccountResult(
+        session_id,
+        completeProfile,
+      );
+      const { error: kycError } = await supabase
+        .from("kyc_sessions")
+        .update({
+          status: "VERIFIED",
+          provider_reference: existingAccountResult.provider_verification_id,
+          normalized_result: existingAccountResult,
+        })
+        .eq("id", session_id)
+        .eq("customer_id", customer.id);
+      if (kycError) {
+        logBvnError("mark_existing_account_kyc_verified", kycError, context);
+        throw kycError;
+      }
       return NextResponse.json({ status: "success", virtual_account: existing });
     }
     if (existing?.status === "PROVISIONING") {
@@ -155,14 +305,7 @@ export async function POST(
     context.reservation_id = reservation.id;
 
     try {
-      const result = await qoreid.verifyBvnBasic<QoreIdBvnResult>(bvn, {
-        firstname: profile.first_name,
-        lastname: profile.last_name,
-        dob: profile.date_of_birth || undefined,
-        phone: profile.whatsapp_number,
-        email: profile.email,
-        gender: profile.gender || undefined,
-      });
+      const result = await verifyBvn(bvn, session_id, completeProfile, context);
 
       console.info("[kyc.verify-bvn]", {
         stage: "qoreid_response",
@@ -183,10 +326,10 @@ export async function POST(
 
       // BVN exists only in this call stack and is never persisted or returned.
       const provisioned = await onecap.createVirtualAccount({
-        first_name: profile.first_name,
-        last_name: profile.last_name,
-        email: profile.email,
-        phone: profile.whatsapp_number,
+        first_name: completeProfile.first_name,
+        last_name: completeProfile.last_name,
+        email: completeProfile.email,
+        phone: completeProfile.whatsapp_number,
         bvn,
       });
       const account = provisioned.virtual_account;
@@ -210,15 +353,7 @@ export async function POST(
         throw saveError;
       }
 
-      const safeKycResult = {
-        provider_verification_id: result.id ? String(result.id) : null,
-        status: "VERIFIED",
-        name_match: match || null,
-        verified_first_name: result.applicant?.firstname || result.bvn?.firstname || null,
-        verified_last_name: result.applicant?.lastname || result.bvn?.lastname || null,
-        verified_date_of_birth: result.bvn?.birthdate || null,
-        verified_gender: result.bvn?.gender || null,
-      };
+      const safeKycResult = normalizedKycResult(result, match);
       const { error: kycError } = await supabase
         .from("kyc_sessions")
         .update({
