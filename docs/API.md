@@ -800,6 +800,10 @@ The dashboard persists these values in `admin_rule_configs`. The current quote-p
 
 Webhook callers must sign the exact raw request body. Do not parse and reserialize the JSON between generating the signature and sending it.
 
+## Provider diagnostics
+
+Every TakeTrips outbound provider call is logged to `take_trip_logs` by the TakeTrips service wrapper. The table records operation (`search`, `validate`, or `order`), method/path, sanitized request payload, response status, sanitized response payload, errors, duration, success flag, and timestamp. Authorization headers and common identity fields are redacted before insert. Operations staff can read these rows through Supabase after running migration `0005_take_trip_logs.sql`.
+
 ### OneCap deposit webhook
 
 ```http

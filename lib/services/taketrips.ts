@@ -1,6 +1,212 @@
 import { ServiceAuthError, ServiceError } from "./errors";
-const base = () => (process.env.TAKETRIPS_BASE_URL || "https://appsconnect.taketrips.co").replace(/\/$/, "");
-function key() { const value = process.env.TAKETRIPS_API_KEY; if (!value) throw new ServiceAuthError("taketrips", new Error("missing TAKETRIPS_API_KEY")); return value; }
-async function call<T>(path: string, init: RequestInit): Promise<T> { const response = await fetch(`${base()}${path}`, { ...init, headers: { Authorization: `Bearer ${key()}`, Accept: "application/json", "Content-Type": "application/json", ...(init.headers || {}) } }); const body = await response.json().catch(() => ({})); if (!response.ok) throw new ServiceError("TakeTrips request failed", "taketrips", body); return body as T; }
-export class TakeTripsService { search(input: Record<string, unknown>) { const q = new URLSearchParams(Object.entries(input).filter(([,v]) => v !== undefined && v !== null).map(([k,v]) => [k, String(v)])); return call<Record<string, unknown>>(`/resellers/flights/search?${q}`, { method: "GET" }); } validate(offer: unknown) { return call<Record<string, unknown>>("/resellers/flights/validate", { method: "POST", body: JSON.stringify({ flightInfo: offer }) }); } order(offer: unknown, passengers: unknown[], paymentRef?: string) { return call<Record<string, unknown>>("/resellers/flights/order", { method: "POST", body: JSON.stringify({ flightOffer: offer, passengers, paymentRef }) }); } }
+import { supabase } from "./supabase";
+
+const PROVIDER = "taketrips";
+const DEFAULT_BASE_URL = "https://appsconnect.taketrips.co";
+
+type LogInput = {
+  operation: string;
+  method: string;
+  path: string;
+  request_payload?: unknown;
+  response_status?: number;
+  response_payload?: unknown;
+  error_message?: string;
+  error_payload?: unknown;
+  duration_ms: number;
+  success: boolean;
+};
+
+const SENSITIVE_KEYS = new Set([
+  "authorization",
+  "apikey",
+  "api_key",
+  "password",
+  "secret",
+  "token",
+  "accesstoken",
+  "bvn",
+  "nin",
+  "passport_number",
+  "passportnumber",
+  "date_of_birth",
+  "dateofbirth",
+  "dob",
+  "first_name",
+  "firstname",
+  "last_name",
+  "lastname",
+  "middle_name",
+  "middlename",
+  "email",
+  "phone",
+]);
+
+function base() {
+  return (process.env.TAKETRIPS_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "");
+}
+
+function key() {
+  const value = process.env.TAKETRIPS_API_KEY;
+  if (!value) {
+    throw new ServiceAuthError(
+      PROVIDER,
+      new Error("missing TAKETRIPS_API_KEY"),
+    );
+  }
+  return value;
+}
+
+function sanitize(value: unknown, depth = 0): unknown {
+  if (depth > 8) return "[truncated]";
+  if (Array.isArray(value)) return value.map((item) => sanitize(item, depth + 1));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([keyName, child]) => {
+      const normalized = keyName.replace(/[_\-\s]/g, "").toLowerCase();
+      return [
+        keyName,
+        SENSITIVE_KEYS.has(normalized)
+          ? "[redacted]"
+          : sanitize(child, depth + 1),
+      ];
+    }),
+  );
+}
+
+async function writeLog(input: LogInput) {
+  try {
+    const { error } = await supabase.admin.from("take_trip_logs").insert({
+      operation: input.operation,
+      method: input.method,
+      path: input.path,
+      request_payload: sanitize(input.request_payload ?? null),
+      response_status: input.response_status ?? null,
+      response_payload: sanitize(input.response_payload ?? null),
+      error_message: input.error_message ?? null,
+      error_payload: sanitize(input.error_payload ?? null),
+      duration_ms: input.duration_ms,
+      success: input.success,
+    });
+    if (error) {
+      console.warn("[taketrips.log] insert failed", {
+        message: error.message,
+        code: error.code,
+      });
+    }
+  } catch (error) {
+    console.warn("[taketrips.log] insert failed", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+async function call<T>(
+  operation: string,
+  path: string,
+  init: RequestInit,
+  requestPayload?: unknown,
+): Promise<T> {
+  const startedAt = Date.now();
+  const method = init.method || "GET";
+  let response: Response | null = null;
+  let body: unknown = {};
+
+  try {
+    response = await fetch(`${base()}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${key()}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(init.headers || {}),
+      },
+    });
+    body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      await writeLog({
+        operation,
+        method,
+        path,
+        request_payload: requestPayload,
+        response_status: response.status,
+        response_payload: body,
+        error_message: "TakeTrips request failed",
+        error_payload: body,
+        duration_ms: Date.now() - startedAt,
+        success: false,
+      });
+      throw new ServiceError("TakeTrips request failed", PROVIDER, body);
+    }
+
+    await writeLog({
+      operation,
+      method,
+      path,
+      request_payload: requestPayload,
+      response_status: response.status,
+      response_payload: body,
+      duration_ms: Date.now() - startedAt,
+      success: true,
+    });
+    return body as T;
+  } catch (error) {
+    if (!response) {
+      await writeLog({
+        operation,
+        method,
+        path,
+        request_payload: requestPayload,
+        error_message: error instanceof Error ? error.message : String(error),
+        error_payload:
+          error instanceof Error && "originalError" in error
+            ? (error as { originalError?: unknown }).originalError
+            : undefined,
+        duration_ms: Date.now() - startedAt,
+        success: false,
+      });
+    }
+    throw error;
+  }
+}
+
+export class TakeTripsService {
+  search(input: Record<string, unknown>) {
+    const queryEntries = Object.entries(input).filter(
+      ([, value]) => value !== undefined && value !== null,
+    );
+    const query = new URLSearchParams(
+      queryEntries.map(([name, value]) => [name, String(value)]),
+    );
+    const path = `/resellers/flights/search?${query}`;
+    return call<Record<string, unknown>>(
+      "search",
+      path,
+      { method: "GET" },
+      Object.fromEntries(queryEntries),
+    );
+  }
+
+  validate(offer: unknown) {
+    const payload = { flightInfo: offer };
+    return call<Record<string, unknown>>(
+      "validate",
+      "/resellers/flights/validate",
+      { method: "POST", body: JSON.stringify(payload) },
+      payload,
+    );
+  }
+
+  order(offer: unknown, passengers: unknown[], paymentRef?: string) {
+    const payload = { flightOffer: offer, passengers, paymentRef };
+    return call<Record<string, unknown>>(
+      "order",
+      "/resellers/flights/order",
+      { method: "POST", body: JSON.stringify(payload) },
+      payload,
+    );
+  }
+}
+
 export const taketrips = new TakeTripsService();
