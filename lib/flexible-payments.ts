@@ -54,6 +54,17 @@ function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function numericAmount(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^\d.]/g, ""));
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+}
+
 function addDays(date: Date, days: number) {
   const next = new Date(date);
   next.setUTCDate(next.getUTCDate() + days);
@@ -183,10 +194,69 @@ export function extractOfferAmount(offer: unknown): number | null {
           ? (value as Record<string, unknown>)[key]
           : undefined;
     }
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (typeof value === "string") {
-      const parsed = Number(value.replace(/[^\d.]/g, ""));
-      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    const amount = numericAmount(value);
+    if (amount) return amount;
+  }
+
+  return findLikelyAmount(offer);
+}
+
+function findLikelyAmount(value: unknown, path: string[] = []): number | null {
+  if (!value || typeof value !== "object") return null;
+  if (path.length > 5) return null;
+
+  const preferredKeys = new Set([
+    "total",
+    "total_amount",
+    "totalamount",
+    "totalprice",
+    "totalfare",
+    "grandtotal",
+    "flexitotal",
+    "amount",
+    "price",
+    "fare",
+    "payableamount",
+    "customerprice",
+  ]);
+  const ignoredKeys = new Set([
+    "id",
+    "routeid",
+    "carrierid",
+    "conversionrate",
+    "rate",
+    "rates",
+    "adult",
+    "children",
+    "infant",
+    "duration",
+    "totaltripduration",
+    "numberofstops",
+    "weight",
+    "count",
+  ]);
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  for (const [key, child] of entries) {
+    const normalized = key.replace(/[_\-\s]/g, "").toLowerCase();
+    if (ignoredKeys.has(normalized)) continue;
+    if (preferredKeys.has(normalized)) {
+      const amount = numericAmount(child);
+      if (amount) return amount;
+    }
+  }
+
+  for (const [key, child] of entries) {
+    const normalized = key.replace(/[_\-\s]/g, "").toLowerCase();
+    if (ignoredKeys.has(normalized)) continue;
+    if (Array.isArray(child)) {
+      for (const item of child.slice(0, 3)) {
+        const amount = findLikelyAmount(item, [...path, key]);
+        if (amount) return amount;
+      }
+    } else if (child && typeof child === "object") {
+      const amount = findLikelyAmount(child, [...path, key]);
+      if (amount) return amount;
     }
   }
 

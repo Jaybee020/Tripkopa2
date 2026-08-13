@@ -411,6 +411,8 @@ Fields:
 
 Do not send placeholder values for unknown optional fields. Omit `offer` instead of sending `{}`, omit `base_amount` instead of sending `0`, and omit `installment_count` instead of sending `0`. The backend treats those placeholder values as omitted, then attempts to use the selected stored offer.
 
+If the provider response uses an unsupported price shape, the endpoint returns `400` with `offer_shape` and `result_shape` metadata. In that case, retry with a positive `base_amount` from the selected offer.
+
 Full-payment quotes apply a 5% MVP service fee. Flexible quotes apply MVP markup/deposit rules, save a versioned repayment plan under `details.pricing.repayment_plan`, and return a `quote` with fields such as:
 
 ```json

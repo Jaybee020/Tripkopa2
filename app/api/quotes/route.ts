@@ -80,10 +80,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const baseAmount = input.base_amount ?? extractOfferAmount(offer);
+    const baseAmount =
+      input.base_amount ??
+      extractOfferAmount(offer) ??
+      extractOfferAmount(search.results);
     if (!baseAmount) {
+      console.warn("[quotes.create]", {
+        stage: "price_not_found",
+        search_id: search.id,
+        customer_id: customer.id,
+        offer_index: input.offer_index ?? 0,
+        offer_shape: resultShape(offer),
+        result_shape: resultShape(search.results),
+      });
       return NextResponse.json(
-        { error: "Unable to determine offer price; pass base_amount" },
+        {
+          error: "Unable to determine offer price; pass base_amount",
+          offer_shape: resultShape(offer),
+          result_shape: resultShape(search.results),
+        },
         { status: 400 },
       );
     }
