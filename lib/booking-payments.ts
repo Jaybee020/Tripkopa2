@@ -327,3 +327,29 @@ export async function applyBookingPayment(paymentId: string) {
     ticketing,
   };
 }
+
+export async function retryBookingTicketing(bookingId: string) {
+  const { data: booking, error: bookingError } = await supabase.admin
+    .from("bookings")
+    .select("*")
+    .eq("id", bookingId)
+    .single();
+  if (bookingError) throw bookingError;
+
+  const { data: payment, error: paymentError } = await supabase.admin
+    .from("payments")
+    .select("*")
+    .eq("booking_id", bookingId)
+    .eq("status", "SUCCEEDED")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (paymentError) throw paymentError;
+  if (!payment) {
+    throw Object.assign(new Error("A succeeded booking payment is required before ticketing"), {
+      status: 409,
+    });
+  }
+
+  return maybeTicketBooking(booking as BookingRow, payment as PaymentRow);
+}

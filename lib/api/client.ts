@@ -5,7 +5,7 @@
 // pages and IntegrationAgent should import from here instead of
 // rolling their own fetch() calls.
 
-import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingList, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuoteRevalidationInput, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
+import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingDetail, OperationsBookingList, OperationsRuleConfig, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuoteRevalidationInput, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
@@ -171,8 +171,24 @@ export async function listOperationsBookings(): Promise<OperationsBookingList> {
   return request<OperationsBookingList>("GET", "/api/operations/bookings");
 }
 
+export async function getOperationsBookingById(booking_id: string): Promise<OperationsBookingDetail> {
+  return request<OperationsBookingDetail>("GET", `/api/operations/bookings/${booking_id}`);
+}
+
 export async function postOperationsBookingsCancelByBookingId(booking_id: string, body: BookingCancellationInput): Promise<Booking> {
   return request<Booking>("POST", `/api/operations/bookings/${booking_id}/cancel`, body);
+}
+
+export async function postOperationsBookingsRetryTicketingByBookingId(booking_id: string): Promise<unknown> {
+  return request<unknown>("POST", `/api/operations/bookings/${booking_id}/retry-ticketing`);
+}
+
+export async function getOperationsRules(): Promise<OperationsRuleConfig> {
+  return request<OperationsRuleConfig>("GET", "/api/operations/rules");
+}
+
+export async function updateOperationsRules(body: { value: Record<string, unknown>; description?: string }): Promise<OperationsRuleConfig> {
+  return request<OperationsRuleConfig>("PUT", "/api/operations/rules", body);
 }
 
 export async function listOperationsReconciliation(): Promise<ReconciliationReport> {

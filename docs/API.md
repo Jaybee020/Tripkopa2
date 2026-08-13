@@ -132,8 +132,12 @@ Many records come directly from Postgres. Decimal amount fields may therefore be
 | `POST` | `/api/payments/{payment_id}/refunds` | Agent | Request a refund |
 | `GET` | `/api/events` | Agent | List customer operational events |
 | `GET` | `/api/operations/bookings` | Staff | List all bookings |
+| `GET` | `/api/operations/bookings/{booking_id}` | Staff + role | Read operations booking detail with payments, installments, ledger, itinerary, and audit events |
 | `POST` | `/api/operations/bookings/{booking_id}/cancel` | Staff | Mark a booking cancellation pending |
+| `POST` | `/api/operations/bookings/{booking_id}/retry-ticketing` | Staff + role | Retry TakeTrips ticketing for a funded booking |
 | `POST` | `/api/operations/bookings/{booking_id}/resolve` | Staff + role | Resolve an operational booking/case |
+| `GET` | `/api/operations/rules` | Staff + role | Read MVP flexible-payment rule config |
+| `PUT` | `/api/operations/rules` | Admin role | Update MVP flexible-payment rule config |
 | `GET` | `/api/operations/reconciliation` | Staff | List reconciliation records |
 | `POST` | `/api/webhooks/payments/onecap` | OneCap signature | Process a successful virtual-account deposit |
 | `POST` | `/api/webhooks/payments/paystack` | Paystack signature | Store a Paystack event |
@@ -706,6 +710,36 @@ GET /api/operations/reconciliation
 
 Responses are `{ "bookings": [...], "total": n }` and `{ "records": [...], "total": n }`, respectively, ordered newest first.
 
+### Read booking operations detail
+
+```http
+GET /api/operations/bookings/{booking_id}
+```
+
+Requires an operations staff role. Returns:
+
+```json
+{
+  "booking": {},
+  "customer": {},
+  "payments": [],
+  "installments": [],
+  "ledger_entries": [],
+  "itinerary": null,
+  "audit_events": []
+}
+```
+
+The dashboard uses this to inspect flexible-payment state, wallet allocation, installment progress, itinerary release level, and previous staff actions.
+
+### Retry ticketing
+
+```http
+POST /api/operations/bookings/{booking_id}/retry-ticketing
+```
+
+Requires an operations staff role. The booking must have at least one succeeded booking payment and must satisfy the ticketing threshold: full amount for full-payment bookings, or deposit amount for flexible bookings. The route reuses the TakeTrips ordering flow and records an audit event.
+
 ### Request booking cancellation
 
 ```http
@@ -716,7 +750,7 @@ POST /api/operations/bookings/{booking_id}/cancel
 {"reason":"Flight no longer required"}
 ```
 
-The reason is required and limited to 500 characters. The handler changes the booking status to `CANCELLATION_PENDING` and echoes the reason in the response. It does not persist the reason in the booking update.
+The reason is required and limited to 500 characters. The handler changes the booking status to `CANCELLATION_PENDING`, echoes the reason in the response, and records an operations audit event. Provider cancellation/refund automation is still a separate workflow.
 
 ### Resolve a booking/case
 
@@ -729,6 +763,32 @@ POST /api/operations/bookings/{booking_id}/resolve
 ```
 
 The reason is required and limited to 500 characters. This endpoint checks the operations role, marks the record `RESOLVED`, saves resolution metadata, and uses optimistic locking. A concurrent or repeated resolution returns `409`.
+
+### Read or update flexible-payment rules
+
+```http
+GET /api/operations/rules
+PUT /api/operations/rules
+```
+
+`GET` requires an operations staff role. `PUT` requires the `admin` staff role.
+
+```json
+{
+  "value": {
+    "rule_version": "flex_mvp_2026_08",
+    "full_service_fee_rate": 0.05,
+    "flex_deposit_rate": 0.3,
+    "domestic_max_installments": 4,
+    "regional_international_max_installments": 8,
+    "final_payment_due_days_before_departure": 10,
+    "grace_period_days": 3
+  },
+  "description": "MVP flexible payment rules."
+}
+```
+
+The dashboard persists these values in `admin_rule_configs`. The current quote-pricing helper still uses the code defaults; wiring quote calculation directly to database-backed rules is the next step before non-MVP pricing changes should be operated from the dashboard.
 
 ## Provider webhooks
 
