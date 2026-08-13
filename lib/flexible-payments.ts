@@ -160,10 +160,19 @@ export function extractOfferAmount(offer: unknown): number | null {
     ["price"],
     ["fare"],
     ["total"],
+    ["grandTotal"],
+    ["flexiTotal"],
+    ["details", "total"],
+    ["details", "price", "total"],
+    ["details", "price", "grandTotal"],
+    ["details", "price", "flexiTotal"],
+    ["details", "price", "amount"],
     ["pricing", "total"],
     ["pricing", "total_amount"],
     ["price", "total"],
     ["price", "amount"],
+    ["price", "grandTotal"],
+    ["price", "flexiTotal"],
   ];
 
   for (const path of candidates) {
@@ -185,13 +194,36 @@ export function extractOfferAmount(offer: unknown): number | null {
 }
 
 export function extractOfferCurrency(offer: unknown, fallback = "NGN") {
-  const value =
-    offer && typeof offer === "object"
-      ? (offer as Record<string, unknown>).currency
-      : undefined;
-  return typeof value === "string" && value.length === 3
-    ? value.toUpperCase()
-    : fallback;
+  const candidates = [
+    ["currency"],
+    ["details", "currency"],
+    ["details", "price", "currency"],
+    ["price", "currency"],
+  ];
+
+  for (const path of candidates) {
+    let value = offer as unknown;
+    for (const key of path) {
+      value =
+        value && typeof value === "object"
+          ? (value as Record<string, unknown>)[key]
+          : undefined;
+    }
+    if (typeof value === "string" && value.length === 3) {
+      return value.toUpperCase();
+    }
+  }
+
+  return fallback;
+}
+
+function isNonEmptyObject(value: unknown): value is Record<string, unknown> {
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value as Record<string, unknown>).length > 0
+  );
 }
 
 export function selectOffer(
@@ -199,20 +231,39 @@ export function selectOffer(
   offerIndex?: number,
   offer?: unknown,
 ) {
-  if (offer) return offer;
+  if (
+    offer &&
+    (typeof offer !== "object" ||
+      Array.isArray(offer) ||
+      Object.keys(offer as Record<string, unknown>).length > 0)
+  ) {
+    return offer;
+  }
   const index = offerIndex ?? 0;
   if (Array.isArray(results)) return results[index];
   if (results && typeof results === "object") {
     const object = results as Record<string, unknown>;
+    if (object.status === false) return null;
     const collections = [
       object.offers,
+      object.flightOffers,
+      object.flight_offers,
       object.flights,
       object.results,
       object.data,
       object.items,
+      isNonEmptyObject(object.data) ? (object.data as Record<string, unknown>).offers : undefined,
+      isNonEmptyObject(object.data) ? (object.data as Record<string, unknown>).flightOffers : undefined,
+      isNonEmptyObject(object.details) ? (object.details as Record<string, unknown>).offers : undefined,
+      isNonEmptyObject(object.details) ? (object.details as Record<string, unknown>).flightOffers : undefined,
     ];
     for (const collection of collections) {
       if (Array.isArray(collection)) return collection[index];
+    }
+    if (index === 0) {
+      if (isNonEmptyObject(object.details)) return object.details;
+      if (isNonEmptyObject(object.data)) return object.data;
+      if (isNonEmptyObject(object)) return object;
     }
   }
   return null;

@@ -10,6 +10,28 @@ import {
   selectOffer,
 } from "@/lib/flexible-payments";
 
+function resultShape(value: unknown) {
+  if (Array.isArray(value)) return { type: "array", length: value.length };
+  if (!value || typeof value !== "object") return { type: typeof value };
+  const object = value as Record<string, unknown>;
+  const keys = Object.keys(object).slice(0, 12);
+  return {
+    type: "object",
+    keys,
+    nested: Object.fromEntries(
+      keys
+        .filter((key) => object[key] && typeof object[key] === "object")
+        .slice(0, 5)
+        .map((key) => [
+          key,
+          Array.isArray(object[key])
+            ? { type: "array", length: (object[key] as unknown[]).length }
+            : { type: "object", keys: Object.keys(object[key] as Record<string, unknown>).slice(0, 8) },
+        ]),
+    ),
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const input = QuoteCreateInput.parse(await request.json());
@@ -42,8 +64,18 @@ export async function POST(request: Request) {
 
     const offer = selectOffer(search.results, input.offer_index, input.offer);
     if (!offer) {
+      console.warn("[quotes.create]", {
+        stage: "offer_not_found",
+        search_id: search.id,
+        customer_id: customer.id,
+        offer_index: input.offer_index ?? 0,
+        result_shape: resultShape(search.results),
+      });
       return NextResponse.json(
-        { error: "Selected flight offer was not found" },
+        {
+          error: "Selected flight offer was not found",
+          result_shape: resultShape(search.results),
+        },
         { status: 404 },
       );
     }

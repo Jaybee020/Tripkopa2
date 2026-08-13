@@ -380,6 +380,8 @@ POST /api/quotes
 
 Creates a full-payment or flexible-payment quote from a stored flight search. Flexible quotes require latest KYC status `VERIFIED`.
 
+For TakeTrips responses shaped as a single offer (`{ "status": true, "details": {...} }`), use `offer_index: 0`; the backend selects `details` as the offer.
+
 ```bash
 curl -X POST "$TRIPKOPA_URL/api/quotes" \
   -H 'Content-Type: application/json' \
@@ -406,6 +408,8 @@ Fields:
 | `base_amount` | Sometimes | Positive number; required when the backend cannot infer price from the offer |
 | `currency` | No | Three-letter code, default `NGN` |
 | `installment_count` | No | Positive integer up to `8`; capped by MVP route rules |
+
+Do not send placeholder values for unknown optional fields. Omit `offer` instead of sending `{}`, omit `base_amount` instead of sending `0`, and omit `installment_count` instead of sending `0`. The backend treats those placeholder values as omitted, then attempts to use the selected stored offer.
 
 Full-payment quotes apply a 5% MVP service fee. Flexible quotes apply MVP markup/deposit rules, save a versioned repayment plan under `details.pricing.repayment_plan`, and return a `quote` with fields such as:
 
