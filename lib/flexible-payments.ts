@@ -320,6 +320,7 @@ export function selectOffer(
       object.flight_offers,
       object.flights,
       object.results,
+      object.details,
       object.data,
       object.items,
       isNonEmptyObject(object.data) ? (object.data as Record<string, unknown>).offers : undefined,

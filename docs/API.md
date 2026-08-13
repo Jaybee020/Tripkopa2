@@ -380,7 +380,7 @@ POST /api/quotes
 
 Creates a full-payment or flexible-payment quote from a stored flight search. Flexible quotes require latest KYC status `VERIFIED`.
 
-For TakeTrips responses shaped as a single offer (`{ "status": true, "details": {...} }`), use `offer_index: 0`; the backend selects `details` as the offer.
+For TakeTrips responses shaped as a single offer (`{ "status": true, "details": {...} }`), use `offer_index: 0`; the backend selects `details` as the offer. For TakeTrips responses shaped as a list (`{ "status": true, "details": [...] }`), `offer_index` selects from that `details` array.
 
 ```bash
 curl -X POST "$TRIPKOPA_URL/api/quotes" \
