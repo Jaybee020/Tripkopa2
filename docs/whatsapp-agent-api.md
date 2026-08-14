@@ -461,12 +461,16 @@ Body:
 ```json
 {
   "booking_id": "booking_id",
-  "amount": 50000,
+  "amount": 5000000,
   "currency": "NGN",
   "email": "ada@example.com",
   "payment_type": "booking"
 }
 ```
+
+`amount` is an integer in minor units. For NGN, `5000000` kobo means
+₦50,000.00. Payment records and the response continue to express `amount` in
+major units.
 
 Response:
 

@@ -610,7 +610,7 @@ curl -X POST "$TRIPKOPA_URL/api/payments/intents" \
   -H "X-WhatsApp-Number: $CUSTOMER_WHATSAPP" \
   -H 'Idempotency-Key: whatsapp-message-12345-wallet-deposit' \
   --data '{
-    "amount":5000,
+    "amount":500000,
     "currency":"NGN",
     "payment_type":"wallet_deposit"
   }'
@@ -621,7 +621,7 @@ Fields:
 | Field | Required | Rule/default |
 |---|---|---|
 | `booking_id` | No | Must belong to this customer if supplied |
-| `amount` | Yes | Positive number |
+| `amount` | Yes | Positive integer in minor units (kobo for NGN); for example, `500000` means ₦5,000.00 |
 | `currency` | No | Three characters, default `NGN`; currently only exact `NGN` is accepted |
 | `email` | No | Valid email; accepted but not currently used by the handler |
 | `payment_type` | No | Default `booking`; use `wallet_deposit`, `booking_deposit`, `installment`, or another agreed internal value |
@@ -638,7 +638,7 @@ curl -X POST "$TRIPKOPA_URL/api/payments/intents" \
   -H 'Idempotency-Key: booking-uuid-deposit-v1' \
   --data '{
     "booking_id":"booking-uuid",
-    "amount":38700,
+    "amount":3870000,
     "currency":"NGN",
     "payment_type":"booking_deposit"
   }'

@@ -263,7 +263,7 @@ export const LedgerEntryList = z.object({
 export type LedgerEntryList = z.infer<typeof LedgerEntryList>;
 export const PaymentIntentCreateInput = z.object({
   booking_id: Id.optional(),
-  amount: z.number().positive(),
+  amount: z.number().int().positive(),
   currency: z.string().length(3).default("NGN"),
   email: z.string().email().optional(),
   payment_type: z.string().default("booking"),

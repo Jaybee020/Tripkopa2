@@ -8,6 +8,10 @@ function money(value: number | string | null | undefined) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
+function minorUnitsToMoney(value: number) {
+  return money(value / 100);
+}
+
 export async function POST(request: Request) {
   try {
     const input = PaymentIntentCreateInput.parse(await request.json());
@@ -50,6 +54,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const amount = minorUnitsToMoney(input.amount);
+
     let bookingMetadata: Record<string, unknown> = {};
     if (input.booking_id) {
       const { data: booking, error: bookingError } = await supabase
@@ -68,7 +74,7 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
-      if (input.amount > money(booking.balance_amount)) {
+      if (amount > money(booking.balance_amount)) {
         return NextResponse.json(
           { error: "Payment amount exceeds booking balance" },
           { status: 400 },
@@ -77,7 +83,7 @@ export async function POST(request: Request) {
       if (
         booking.booking_type === "flexible" &&
         ["AWAITING_DEPOSIT", "AWAITING_PAYMENT"].includes(booking.status) &&
-        input.amount < money(booking.deposit_amount)
+        amount < money(booking.deposit_amount)
       ) {
         return NextResponse.json(
           { error: "Payment amount is below the required deposit" },
@@ -99,11 +105,15 @@ export async function POST(request: Request) {
         provider: "onecap_providus",
         provider_reference: providerReference,
         payment_type: input.payment_type,
-        amount: input.amount,
+        amount,
         currency: input.currency,
         status: "PENDING",
         idempotency_key: idempotencyKey,
-        metadata: { virtual_account_id: account.id, ...bookingMetadata },
+        metadata: {
+          virtual_account_id: account.id,
+          requested_amount_minor: input.amount,
+          ...bookingMetadata,
+        },
       })
       .select("*")
       .single();
