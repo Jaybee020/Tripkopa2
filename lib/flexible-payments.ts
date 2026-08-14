@@ -265,6 +265,8 @@ function findLikelyAmount(value: unknown, path: string[] = []): number | null {
 
 export function extractOfferCurrency(offer: unknown, fallback = "NGN") {
   const candidates = [
+    ["price", "conversion", "rates", "BASE"],
+    ["details", "price", "conversion", "rates", "BASE"],
     ["currency"],
     ["details", "currency"],
     ["details", "price", "currency"],
@@ -279,12 +281,12 @@ export function extractOfferCurrency(offer: unknown, fallback = "NGN") {
           ? (value as Record<string, unknown>)[key]
           : undefined;
     }
-    if (typeof value === "string" && value.length === 3) {
-      return value.toUpperCase();
+    if (typeof value === "string" && value.trim().length === 3) {
+      return value.trim().toUpperCase();
     }
   }
 
-  return fallback;
+  return fallback.trim().toUpperCase();
 }
 
 function isNonEmptyObject(value: unknown): value is Record<string, unknown> {
