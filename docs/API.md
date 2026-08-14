@@ -482,7 +482,10 @@ Body is optional in meaning but must be valid JSON; send `{}` or a positive inte
 {"version":2}
 ```
 
-The provider validates the saved quote details. The API updates the quote to `ACTIVE`, replaces its details, and increments its version.
+The provider validates the saved quote details. The backend sends the saved
+TakeTrips offer object as the raw JSON body to
+`/resellers/flights/validate`. The API updates the quote to `ACTIVE`, replaces
+its details, and increments its version.
 
 If TakeTrips rejects the saved offer during validation, the API marks the quote
 `REPRICE_REQUIRED` and returns `409`:

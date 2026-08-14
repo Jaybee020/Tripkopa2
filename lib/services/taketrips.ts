@@ -202,12 +202,11 @@ export class TakeTripsService {
   }
 
   validate(offer: unknown) {
-    const payload = { flightInfo: offer };
     return call<Record<string, unknown>>(
       "validate",
       "/resellers/flights/validate",
-      { method: "POST", body: JSON.stringify(payload) },
-      payload,
+      { method: "POST", body: JSON.stringify(offer) },
+      offer,
     );
   }
 

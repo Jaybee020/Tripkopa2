@@ -298,7 +298,8 @@ Response:
 
 ### Revalidate Quote
 
-Revalidates the selected provider offer before booking.
+Revalidates the selected provider offer before booking. The backend sends the
+saved TakeTrips offer object as the raw JSON body to TakeTrips validate.
 
 ```http
 POST /api/quotes/{quote_id}/revalidate
