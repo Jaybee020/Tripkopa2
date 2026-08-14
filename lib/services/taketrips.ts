@@ -74,6 +74,13 @@ function sanitize(value: unknown, depth = 0): unknown {
   );
 }
 
+function providerMessage(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const payload = value as Record<string, unknown>;
+  const message = payload.message ?? payload.error;
+  return typeof message === "string" && message.trim() ? message : null;
+}
+
 async function writeLog(input: LogInput) {
   try {
     const { error } = await supabase.admin.from("take_trip_logs").insert({
@@ -125,6 +132,10 @@ async function call<T>(
     body = await response.json().catch(() => ({}));
 
     if (!response.ok) {
+      const message = providerMessage(body);
+      const errorMessage = message
+        ? `TakeTrips request failed: ${message}`
+        : "TakeTrips request failed";
       await writeLog({
         operation,
         method,
@@ -132,12 +143,14 @@ async function call<T>(
         request_payload: requestPayload,
         response_status: response.status,
         response_payload: body,
-        error_message: "TakeTrips request failed",
+        error_message: errorMessage,
         error_payload: body,
         duration_ms: Date.now() - startedAt,
         success: false,
       });
-      throw new ServiceError("TakeTrips request failed", PROVIDER, body);
+      const error = new ServiceError(errorMessage, PROVIDER, body);
+      error.status = response.status >= 500 ? 502 : response.status;
+      throw error;
     }
 
     await writeLog({

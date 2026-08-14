@@ -117,16 +117,62 @@ export const VirtualAccount = z
   })
   .passthrough();
 export type VirtualAccount = z.infer<typeof VirtualAccount>;
-export const FlightSearchInput = z.object({
+const PositiveInt = z.preprocess(
+  (value) =>
+    typeof value === "string" && value.trim() ? Number(value) : value,
+  z.number().int().positive(),
+);
+const NonnegativeInt = z.preprocess(
+  (value) =>
+    typeof value === "string" && value.trim() ? Number(value) : value,
+  z.number().int().nonnegative(),
+);
+const BooleanInput = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return value;
+}, z.boolean());
+export const FlightSearchInput = z.preprocess((value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const input = value as Record<string, unknown>;
+  const returnDate = input.return_date ?? input.returnDate ?? null;
+  return {
+    origin: input.origin ?? input.from,
+    destination: input.destination ?? input.to,
+    departure_date: input.departure_date ?? input.departureDate,
+    return_date: returnDate,
+    trip_type:
+      input.trip_type ??
+      input.tripType ??
+      (returnDate ? "return" : "one_way"),
+    passenger_count: input.passenger_count ?? input.adult ?? input.adult_count,
+    adult_count: input.adult_count ?? input.adult ?? input.passenger_count,
+    children_count: input.children_count ?? input.children,
+    infant_count: input.infant_count ?? input.infant,
+    cabin_class: input.cabin_class ?? input.cabinClass,
+    direct: input.direct,
+    all_providers: input.all_providers ?? input.allProviders,
+    payment_preference: input.payment_preference ?? input.paymentPreference,
+  };
+}, z.object({
   origin: z.string().min(3),
   destination: z.string().min(3),
   departure_date: z.string(),
-  return_date: z.string().nullable().optional(),
+  return_date: z.string().nullable().default(null),
   trip_type: z.enum(["one_way", "return"]).default("one_way"),
-  passenger_count: z.number().int().positive().default(1),
+  passenger_count: PositiveInt.default(1),
+  adult_count: PositiveInt.default(1),
+  children_count: NonnegativeInt.default(0),
+  infant_count: NonnegativeInt.default(0),
   cabin_class: z.string().default("Economy"),
+  direct: BooleanInput.default(false),
+  all_providers: BooleanInput.default(true),
   payment_preference: z.enum(["full", "flexible"]).default("full"),
-});
+}));
 export type FlightSearchInput = z.infer<typeof FlightSearchInput>;
 export const FlightSearch = z
   .object({

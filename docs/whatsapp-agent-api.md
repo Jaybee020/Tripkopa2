@@ -216,13 +216,34 @@ Body:
 ```json
 {
   "origin": "LOS",
-  "destination": "ABV",
-  "departure_date": "2026-09-20",
+  "destination": "LON",
+  "departure_date": "2026-12-24",
   "return_date": null,
   "trip_type": "one_way",
-  "passenger_count": 1,
+  "adult_count": 1,
+  "children_count": 0,
+  "infant_count": 0,
   "cabin_class": "Economy",
+  "direct": false,
+  "all_providers": true,
   "payment_preference": "flexible"
+}
+```
+
+The API also accepts provider-style aliases:
+
+```json
+{
+  "from": "LOS",
+  "to": "LON",
+  "departureDate": "2026-12-24",
+  "returnDate": null,
+  "direct": false,
+  "adult": 1,
+  "children": 0,
+  "infant": 0,
+  "cabinClass": "Economy",
+  "allProviders": true
 }
 ```
 
@@ -232,6 +253,10 @@ Allowed values:
 | --- | --- |
 | `trip_type` | `one_way`, `return` |
 | `payment_preference` | `full`, `flexible` |
+
+Defaults: `adult_count: 1`, `children_count: 0`, `infant_count: 0`,
+`cabin_class: "Economy"`, `direct: false`, `all_providers: true`,
+`payment_preference: "full"`.
 
 Response includes the stored search row and provider results:
 
@@ -286,6 +311,20 @@ Body:
   "version": 1
 }
 ```
+
+If provider validation fails, the quote is marked `REPRICE_REQUIRED` and the API
+returns `409`:
+
+```json
+{
+  "error": "Quote could not be revalidated",
+  "status": "REPRICE_REQUIRED",
+  "provider_error": "Validation Failed: Failed to Validate"
+}
+```
+
+The agent should then ask the customer to choose another offer or run a new
+flight search.
 
 ## Bookings
 
@@ -503,4 +542,3 @@ Response:
 6. Call `POST /api/bookings` after passenger details and terms acceptance.
 7. Call `GET /api/wallet` or `POST /api/payments/intents` to provide payment instructions.
 8. Poll `GET /api/bookings/{booking_id}`, `GET /api/payments/{payment_id}`, or `GET /api/events` for status updates.
-

@@ -347,15 +347,23 @@ curl -X POST "$TRIPKOPA_URL/api/flights/searches" \
   -H "X-WhatsApp-Number: $CUSTOMER_WHATSAPP" \
   --data '{
     "origin":"LOS",
-    "destination":"ABV",
-    "departure_date":"2026-09-15",
-    "return_date":"2026-09-20",
-    "trip_type":"return",
-    "passenger_count":1,
+    "destination":"LON",
+    "departure_date":"2026-12-24",
+    "return_date":null,
+    "trip_type":"one_way",
+    "adult_count":1,
+    "children_count":0,
+    "infant_count":0,
     "cabin_class":"Economy",
+    "direct":false,
+    "all_providers":true,
     "payment_preference":"flexible"
   }'
 ```
+
+The API also accepts TakeTrips-style aliases from agents: `from`, `to`,
+`departureDate`, `returnDate`, `adult`, `children`, `infant`, `cabinClass`, and
+`allProviders`.
 
 Rules and defaults:
 
@@ -366,9 +374,20 @@ Rules and defaults:
 | `departure_date` | Yes | String passed to the flight provider |
 | `return_date` | No | String or `null` |
 | `trip_type` | No | `one_way` (default) or `return` |
-| `passenger_count` | No | Positive integer; default `1` |
+| `passenger_count` | No | Backward-compatible adult count; default `1` |
+| `adult_count` | No | Positive integer; default `1` |
+| `children_count` | No | Non-negative integer; default `0` |
+| `infant_count` | No | Non-negative integer; default `0` |
 | `cabin_class` | No | Default `Economy` |
+| `direct` | No | Boolean; default `false` |
+| `all_providers` | No | Boolean; default `true` |
 | `payment_preference` | No | `full` (default) or `flexible` |
+
+The backend sends this full TakeTrips query by default:
+
+```text
+from=LOS&to=LON&departureDate=2026-12-24&returnDate=&direct=false&adult=1&children=0&infant=0&cabinClass=Economy&allProviders=true
+```
 
 Returns `201` with a stored search record whose `results` field contains the provider response. The caller should let the customer choose one offer from this response, then create a quote.
 
@@ -464,6 +483,20 @@ Body is optional in meaning but must be valid JSON; send `{}` or a positive inte
 ```
 
 The provider validates the saved quote details. The API updates the quote to `ACTIVE`, replaces its details, and increments its version.
+
+If TakeTrips rejects the saved offer during validation, the API marks the quote
+`REPRICE_REQUIRED` and returns `409`:
+
+```json
+{
+  "error": "Quote could not be revalidated",
+  "status": "REPRICE_REQUIRED",
+  "provider_error": "Validation Failed: Failed to Validate"
+}
+```
+
+When this happens, the agent should ask the customer to pick another quote from
+the current search result or run a fresh search before booking.
 
 ## Bookings and installments
 
@@ -892,11 +925,15 @@ const response = await fetch(`${baseUrl}/api/flights/searches`, {
   },
   body: JSON.stringify({
     origin: "LOS",
-    destination: "ABV",
-    departure_date: "2026-09-15",
+    destination: "LON",
+    departure_date: "2026-12-24",
     trip_type: "one_way",
-    passenger_count: 1,
+    adult_count: 1,
+    children_count: 0,
+    infant_count: 0,
     cabin_class: "Economy",
+    direct: false,
+    all_providers: true,
     payment_preference: "full",
   }),
 });
