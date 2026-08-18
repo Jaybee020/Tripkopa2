@@ -6,6 +6,7 @@ import { bad, failure } from "@/lib/api-utils";
 const Input = z
   .object({
     first_name: z.string().trim().min(1).max(100),
+    middle_name: z.string().trim().min(1).max(100),
     last_name: z.string().trim().min(1).max(100),
     email: z.string().trim().email(),
   })
@@ -30,7 +31,7 @@ export async function PATCH(
         profile_completed_at: new Date().toISOString(),
       })
       .eq("id", customer.id)
-      .select("id,first_name,last_name,email,profile_completed_at")
+      .select("id,first_name,middle_name,last_name,email,profile_completed_at")
       .single();
     if (error) throw error;
 

@@ -43,6 +43,7 @@ export default function KycVerificationPage({
   const [state, setState] = useState<KycState>("exchanging");
   const [consent, setConsent] = useState(false);
   const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [bvn, setBvn] = useState("");
@@ -116,6 +117,7 @@ export default function KycVerificationPage({
 
   const startVerification = async () => {
     const normalizedFirstName = firstName.trim();
+    const normalizedMiddleName = middleName.trim();
     const normalizedLastName = lastName.trim();
     const normalizedEmail = email.trim();
 
@@ -123,8 +125,8 @@ export default function KycVerificationPage({
       setNotice("Please confirm your consent before continuing.");
       return;
     }
-    if (!normalizedFirstName || !normalizedLastName) {
-      setNotice("Enter your first and last name.");
+    if (!normalizedFirstName || !normalizedMiddleName || !normalizedLastName) {
+      setNotice("Enter your full name exactly as it appears on your BVN.");
       return;
     }
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
@@ -151,6 +153,7 @@ export default function KycVerificationPage({
     try {
       await updateKycSessionProfile(sessionId, {
         first_name: normalizedFirstName,
+        middle_name: normalizedMiddleName,
         last_name: normalizedLastName,
         email: normalizedEmail,
       });
@@ -168,6 +171,7 @@ export default function KycVerificationPage({
   const reset = () => {
     setConsent(false);
     setFirstName("");
+    setMiddleName("");
     setLastName("");
     setEmail("");
     setNotice("");
@@ -356,6 +360,10 @@ export default function KycVerificationPage({
                     described above.
                   </span>
                 </label>
+                <p className="kyc-name-guidance" role="note">
+                  Enter your full legal name exactly as it is registered on
+                  your BVN. The names must match for validation to succeed.
+                </p>
                 <div className="kyc-field-grid">
                   <label className="kyc-field">
                     <span>First name</span>
@@ -368,6 +376,21 @@ export default function KycVerificationPage({
                         setNotice("");
                       }}
                       placeholder="First name"
+                      required
+                    />
+                  </label>
+                  <label className="kyc-field">
+                    <span>Middle name</span>
+                    <input
+                      type="text"
+                      autoComplete="additional-name"
+                      value={middleName}
+                      onChange={(event) => {
+                        setMiddleName(event.target.value);
+                        setNotice("");
+                      }}
+                      placeholder="Middle name"
+                      required
                     />
                   </label>
                   <label className="kyc-field">
@@ -381,6 +404,7 @@ export default function KycVerificationPage({
                         setNotice("");
                       }}
                       placeholder="Last name"
+                      required
                     />
                   </label>
                 </div>
@@ -395,13 +419,14 @@ export default function KycVerificationPage({
                       setNotice("");
                     }}
                     placeholder="you@example.com"
+                    required
                   />
                 </label>
                 <label className="kyc-field">
                   <span>Bank Verification Number</span>
                   <input
                     className="kyc-bvn-input"
-                    type="password"
+                    type="text"
                     inputMode="numeric"
                     autoComplete="off"
                     maxLength={11}
@@ -411,8 +436,13 @@ export default function KycVerificationPage({
                       setNotice("");
                     }}
                     placeholder="11-digit BVN"
+                    required
                   />
-                  <small>Your BVN is verified securely and is not stored by Tripkopa.</small>
+                  <small>
+                    We need your BVN to meet compliance requirements and
+                    create your dedicated Tripkopa wallet. It is verified
+                    securely and is not stored by Tripkopa.
+                  </small>
                 </label>
                 {notice && (
                   <div className="kyc-inline-error" role="alert">
@@ -425,6 +455,7 @@ export default function KycVerificationPage({
                   disabled={
                     !consent ||
                     !firstName.trim() ||
+                    !middleName.trim() ||
                     !lastName.trim() ||
                     !email.trim() ||
                     bvn.length !== 11

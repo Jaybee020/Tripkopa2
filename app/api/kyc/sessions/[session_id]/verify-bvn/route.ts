@@ -219,16 +219,21 @@ export async function POST(
 
     const { data: profile, error: profileError } = await supabase
       .from("customers")
-      .select("first_name,last_name,email,date_of_birth,gender,whatsapp_number")
+      .select("first_name,middle_name,last_name,email,date_of_birth,gender,whatsapp_number")
       .eq("id", customer.id)
       .single();
     if (profileError) {
       logBvnError("load_profile", profileError, context);
       throw profileError;
     }
-    if (!profile.first_name || !profile.last_name || !profile.email) {
+    if (
+      !profile.first_name ||
+      !profile.middle_name ||
+      !profile.last_name ||
+      !profile.email
+    ) {
       return NextResponse.json(
-        { error: "Complete the customer name and email before KYC" },
+        { error: "Complete the customer's full name and email before KYC" },
         { status: 409 },
       );
     }

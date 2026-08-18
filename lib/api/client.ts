@@ -209,7 +209,7 @@ export async function postKycSessionsConsentBySessionId(session_id: string): Pro
   return request<unknown>("POST", `/api/kyc/sessions/${session_id}/consent`, { consent: true, privacy_notice_version: "1.0" });
 }
 
-export async function updateKycSessionProfile(session_id: string, body: Pick<CustomerProfileUpdate, "first_name" | "last_name" | "email">): Promise<CustomerProfile> {
+export async function updateKycSessionProfile(session_id: string, body: Pick<CustomerProfileUpdate, "first_name" | "middle_name" | "last_name" | "email">): Promise<CustomerProfile> {
   return request<CustomerProfile>("PATCH", `/api/kyc/sessions/${session_id}/profile`, body);
 }
 
