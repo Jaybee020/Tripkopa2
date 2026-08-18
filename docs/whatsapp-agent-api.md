@@ -143,6 +143,16 @@ curl -X PATCH https://tripkopa2.vercel.app/api/me \
 
 ## KYC
 
+### Get Financing Profile
+
+After KYC and before negotiating a flexible plan, call:
+
+```http
+GET /api/me/financing
+```
+
+This returns the customer's public effective tier, successful cycles, route-specific deposit rates and caps, post-travel allowance, and active rule version. Do not expose internal behavioral inputs or risk events.
+
 ### Get Latest KYC Status
 
 ```http
@@ -226,7 +236,8 @@ Body:
   "cabin_class": "Economy",
   "direct": false,
   "all_providers": true,
-  "payment_preference": "flexible"
+  "payment_preference": "flexible",
+  "ticket_type": "refundable"
 }
 ```
 
@@ -253,6 +264,7 @@ Allowed values:
 | --- | --- |
 | `trip_type` | `one_way`, `return` |
 | `payment_preference` | `full`, `flexible` |
+| `ticket_type` | `refundable`, `nonrefundable`, `any` |
 
 Defaults: `adult_count: 1`, `children_count: 0`, `infant_count: 0`,
 `cabin_class: "Economy"`, `direct: false`, `all_providers: true`,
@@ -278,6 +290,29 @@ GET /api/flights/searches/{search_id}
 ```
 
 ## Quotes
+
+### Create Quote
+
+```http
+POST /api/quotes
+```
+
+For generated repayment dates:
+
+```json
+{
+  "search_id":"search_id",
+  "booking_type":"flexible",
+  "offer_index":0,
+  "repayment_plan_request":{
+    "mode":"generated",
+    "frequency":"weekly",
+    "installment_count":4
+  }
+}
+```
+
+Use `monthly` for calendar-month repayments. For a negotiated plan, send `mode: custom` and an ordered `installments` array containing positive `amount`, ISO `due_date`, and optional `phase` (`PRE_TRAVEL` or `POST_TRAVEL`). The backend validates route caps, exact totals, tier eligibility, 10/14-day deadlines, and the 90-day post-travel limit.
 
 ### Get Quote
 
@@ -352,7 +387,8 @@ Body:
     }
   ],
   "terms_accepted": true,
-  "payment_preference": "flexible"
+  "payment_preference": "flexible",
+  "quote_version": 1
 }
 ```
 
@@ -398,6 +434,8 @@ Response:
   "installments": []
 }
 ```
+
+`GET` evaluates overdue and grace state before returning. After the agent actually sends a reminder, call `POST /api/installments/{installment_id}` with a unique `Idempotency-Key` for that logical reminder to record it for behavioral history.
 
 ## Wallet
 

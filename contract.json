@@ -120,6 +120,15 @@
       "handler_file": "app/api/me/kyc/route.ts"
     },
     {
+      "method": "GET",
+      "path": "/api/me/financing",
+      "purpose": "Evaluate repayment lifecycle state and return the customer's public trust-based financing profile.",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "FinancingProfile",
+      "handler_file": "app/api/me/financing/route.ts"
+    },
+    {
       "method": "POST",
       "path": "/api/flights/searches",
       "purpose": "",
@@ -247,6 +256,15 @@
     },
     {
       "method": "POST",
+      "path": "/api/installments/[installment_id]",
+      "purpose": "Record a repayment reminder for behavioral reliability metrics.",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": null,
+      "response_schema_name": "Installment",
+      "handler_file": "app/api/installments/[installment_id]/route.ts"
+    },
+    {
+      "method": "POST",
       "path": "/api/webhooks/payments/paystack",
       "purpose": "",
       "auth": "public",
@@ -280,6 +298,33 @@
       "request_schema_name": "BookingCancellationInput",
       "response_schema_name": "Booking",
       "handler_file": "app/api/operations/bookings/[booking_id]/cancel/route.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/operations/customers/[customer_id]/trust-tier",
+      "purpose": "Set or clear an admin-audited customer trust-tier override.",
+      "auth": "admin",
+      "request_schema_name": null,
+      "response_schema_name": "FinancingProfile",
+      "handler_file": "app/api/operations/customers/[customer_id]/trust-tier/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/operations/customers/[customer_id]/risk-events",
+      "purpose": "Create an audited fraud, default, or operational risk event used by trust-tier evaluation.",
+      "auth": "operations_staff",
+      "request_schema_name": null,
+      "response_schema_name": null,
+      "handler_file": "app/api/operations/customers/[customer_id]/risk-events/route.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/operations/customers/[customer_id]/risk-events",
+      "purpose": "Resolve an audited customer risk event and refresh their trust tier.",
+      "auth": "operations_staff",
+      "request_schema_name": null,
+      "response_schema_name": null,
+      "handler_file": "app/api/operations/customers/[customer_id]/risk-events/route.ts"
     },
     {
       "method": "GET",

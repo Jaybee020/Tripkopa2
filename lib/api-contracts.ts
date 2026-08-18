@@ -157,6 +157,7 @@ export const FlightSearchInput = z.preprocess((value) => {
     direct: input.direct,
     all_providers: input.all_providers ?? input.allProviders,
     payment_preference: input.payment_preference ?? input.paymentPreference,
+    ticket_type: input.ticket_type ?? input.ticketType,
   };
 }, z.object({
   origin: z.string().min(3),
@@ -172,6 +173,7 @@ export const FlightSearchInput = z.preprocess((value) => {
   direct: BooleanInput.default(false),
   all_providers: BooleanInput.default(true),
   payment_preference: z.enum(["full", "flexible"]).default("full"),
+  ticket_type: z.enum(["refundable", "nonrefundable", "any"]).default("any"),
 }));
 export type FlightSearchInput = z.infer<typeof FlightSearchInput>;
 export const FlightSearch = z
@@ -195,6 +197,30 @@ const PositiveOptionalInt = z.preprocess(
     value === 0 || value === "" || value === null ? undefined : value,
   z.number().int().positive().max(8).optional(),
 );
+const RepaymentInstallmentInput = z.object({
+  amount: z.number().positive(),
+  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  phase: z.enum(["PRE_TRAVEL", "POST_TRAVEL"]).optional(),
+});
+const GeneratedRepaymentPlanInput = z.object({
+  mode: z.literal("generated"),
+  frequency: z.enum(["weekly", "monthly"]),
+  installment_count: z.number().int().positive().max(8),
+  post_travel: z.object({
+    percentage: z.number().positive().max(30),
+    frequency: z.enum(["weekly", "monthly"]),
+    installment_count: z.number().int().positive().max(8),
+  }).optional(),
+});
+const CustomRepaymentPlanInput = z.object({
+  mode: z.literal("custom"),
+  installments: z.array(RepaymentInstallmentInput).min(1).max(8),
+});
+export const RepaymentPlanRequestInput = z.discriminatedUnion("mode", [
+  GeneratedRepaymentPlanInput,
+  CustomRepaymentPlanInput,
+]);
+export type RepaymentPlanRequestInput = z.infer<typeof RepaymentPlanRequestInput>;
 export const QuoteCreateInput = z
   .object({
     search_id: Id,
@@ -204,8 +230,12 @@ export const QuoteCreateInput = z
     base_amount: PositiveOptionalNumber,
     currency: z.string().length(3).default("NGN"),
     installment_count: PositiveOptionalInt,
+    repayment_plan_request: RepaymentPlanRequestInput.optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => !(value.installment_count && value.repayment_plan_request), {
+    message: "Use either installment_count or repayment_plan_request, not both",
+  });
 export type QuoteCreateInput = z.infer<typeof QuoteCreateInput>;
 export const Quote = z
   .object({
@@ -226,6 +256,7 @@ export const BookingCreateInput = z.object({
   passengers: z.array(z.record(z.string(), Any)).min(1),
   terms_accepted: z.boolean().default(false),
   payment_preference: z.string().optional(),
+  quote_version: z.number().int().positive().optional(),
 });
 export type BookingCreateInput = z.infer<typeof BookingCreateInput>;
 export const Booking = z
@@ -248,6 +279,19 @@ export const RepaymentSchedule = z.object({
   installments: z.array(Any),
 });
 export type RepaymentSchedule = z.infer<typeof RepaymentSchedule>;
+export const FinancingProfile = z.object({
+  computed_tier: z.enum(["OBSERVER", "EXPLORER", "VOYAGER", "NAVIGATOR", "AMBASSADOR"]),
+  effective_tier: z.enum(["OBSERVER", "EXPLORER", "VOYAGER", "NAVIGATOR", "AMBASSADOR"]),
+  successful_cycles: z.number(),
+  on_time_repayment_rate: z.number(),
+  reminder_dependency_rate: z.number(),
+  kyc_verified: z.boolean().optional(),
+  deposit_rates: Any.optional(),
+  financing_caps: Any.optional(),
+  post_travel_max_percentage: z.number().optional(),
+  rule_version: z.string().optional(),
+}).passthrough();
+export type FinancingProfile = z.infer<typeof FinancingProfile>;
 export const Wallet = z
   .object({
     customer_id: Id,
@@ -348,6 +392,9 @@ export const OperationsBookingDetail = z.object({
   ledger_entries: z.array(Any),
   itinerary: Any.nullable().optional(),
   audit_events: z.array(Any),
+  risk_events: z.array(Any).optional(),
+  trust_tier_history: z.array(Any).optional(),
+  financing_profile: FinancingProfile.optional(),
 });
 export type OperationsBookingDetail = z.infer<typeof OperationsBookingDetail>;
 export const OperationsRuleConfig = z

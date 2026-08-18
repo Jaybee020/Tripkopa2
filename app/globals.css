@@ -71,6 +71,8 @@ body {
 .ops-rule-field span { font:10px var(--font-geist-mono),monospace; text-transform:uppercase; letter-spacing:.06em; color:var(--app-faint); overflow-wrap:anywhere; }
 .ops-rule-field input { height:38px; border:1px solid var(--app-rule); border-radius:5px; padding:0 10px; color:var(--app-ink); background:#fffefa; font-size:12px; outline:none; }
 .ops-rule-field input:focus { border-color:#3859a8; box-shadow:0 0 0 3px #e9eefb; }
+.ops-tier-control { margin-top:14px; }.ops-tier-control select { height:38px; border:1px solid var(--app-rule); border-radius:5px; padding:0 10px; color:var(--app-ink); background:#fffefa; }.ops-tier-control .ops-secondary-button { margin-top:3px; width:max-content; }
+.ops-rules-json { display:grid; gap:8px; padding:0 22px 22px; color:var(--app-muted); font-size:10px; }.ops-rules-json span { font:10px var(--font-geist-mono),monospace; text-transform:uppercase; letter-spacing:.06em; color:var(--app-faint); }.ops-rules-json textarea { width:100%; min-height:420px; resize:vertical; padding:14px; border:1px solid var(--app-rule); border-radius:5px; background:#fffefa; color:var(--app-ink); font:11px/1.55 var(--font-geist-mono),monospace; outline:none; }.ops-rules-json textarea:focus { border-color:#3859a8; box-shadow:0 0 0 3px #e9eefb; }
 .ops-booking-modal { max-width:920px; max-height:88vh; overflow:auto; }
 .ops-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding:0 24px 18px; }
 .ops-detail-grid article { border:1px solid var(--app-rule); border-radius:8px; background:#fbfaf7; overflow:hidden; }

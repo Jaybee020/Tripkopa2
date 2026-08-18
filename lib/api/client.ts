@@ -5,7 +5,7 @@
 // pages and IntegrationAgent should import from here instead of
 // rolling their own fetch() calls.
 
-import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingDetail, OperationsBookingList, OperationsRuleConfig, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuoteRevalidationInput, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
+import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FinancingProfile, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingDetail, OperationsBookingList, OperationsRuleConfig, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuoteRevalidationInput, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
@@ -99,6 +99,10 @@ export async function listMeKyc(context: AgentRequestContext): Promise<KycStatus
   return request<KycStatus>("GET", "/api/me/kyc", undefined, agentHeaders(context));
 }
 
+export async function getFinancingProfile(context: AgentRequestContext): Promise<FinancingProfile> {
+  return request<FinancingProfile>("GET", "/api/me/financing", undefined, agentHeaders(context));
+}
+
 export async function createFlightsSearches(context: AgentRequestContext, body: FlightSearchInput): Promise<FlightSearch> {
   return request<FlightSearch>("POST", "/api/flights/searches", body, agentHeaders(context));
 }
@@ -159,6 +163,10 @@ export async function getInstallmentsByInstallmentId(context: AgentRequestContex
   return request<Installment>("GET", `/api/installments/${installment_id}`, undefined, agentHeaders(context));
 }
 
+export async function recordInstallmentReminder(context: AgentRequestContext, installment_id: string, idempotencyKey: string): Promise<Installment> {
+  return request<Installment>("POST", `/api/installments/${installment_id}`, {}, { ...agentHeaders(context), "Idempotency-Key": idempotencyKey });
+}
+
 export async function createWebhooksPaymentsPaystack(body: PaystackWebhookInput): Promise<unknown> {
   return request<unknown>("POST", "/api/webhooks/payments/paystack", body);
 }
@@ -181,6 +189,10 @@ export async function postOperationsBookingsCancelByBookingId(booking_id: string
 
 export async function postOperationsBookingsRetryTicketingByBookingId(booking_id: string): Promise<unknown> {
   return request<unknown>("POST", `/api/operations/bookings/${booking_id}/retry-ticketing`);
+}
+
+export async function updateOperationsCustomerTrustTier(customer_id: string, body: { tier: "OBSERVER" | "EXPLORER" | "VOYAGER" | "NAVIGATOR" | "AMBASSADOR" | null; reason: string }): Promise<FinancingProfile> {
+  return request<FinancingProfile>("PUT", `/api/operations/customers/${customer_id}/trust-tier`, body);
 }
 
 export async function getOperationsRules(): Promise<OperationsRuleConfig> {

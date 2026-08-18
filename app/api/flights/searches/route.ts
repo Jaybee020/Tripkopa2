@@ -3,6 +3,7 @@ import { z } from "zod";
 import { FlightSearchInput } from "@/lib/api-contracts";
 import { requireAgentCustomer } from "@/lib/auth/agent";
 import { taketrips } from "@/lib/services/taketrips";
+import { filterSearchResultsByTicketType } from "@/lib/ticket-rules";
 import { bad, failure } from "@/lib/api-utils";
 
 export async function POST(request: Request) {
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
       cabinClass: input.cabin_class,
       allProviders: input.all_providers,
     });
+    const results = filterSearchResultsByTicketType(provider, input.ticket_type);
     const { data, error } = await supabase
       .from("flight_searches")
       .insert({
@@ -34,8 +36,9 @@ export async function POST(request: Request) {
         trip_type: input.trip_type,
         passenger_count: passengerCount,
         cabin_class: input.cabin_class,
+        ticket_type: input.ticket_type,
         status: "COMPLETED",
-        results: provider,
+        results,
       })
       .select("*")
       .single();

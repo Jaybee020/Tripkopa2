@@ -35,6 +35,7 @@ import {
   postOperationsBookingsCancelByBookingId,
   postOperationsBookingsRetryTicketingByBookingId,
   updateOperationsRules,
+  updateOperationsCustomerTrustTier,
 } from "@/lib/api/client";
 import type {
   CurrentUser,
@@ -51,6 +52,7 @@ type NavItem = "Overview" | "Bookings" | "Rules" | "Reconciliation";
 const REVIEW_STATUSES = new Set([
   "MANUAL_REVIEW",
   "CANCELLATION_PENDING",
+  "CANCELLATION_REVIEW",
   "FAILED",
   "PAYMENT_RECEIVED",
   "BOOKING_IN_PROGRESS",
@@ -159,7 +161,9 @@ export default function OperationsDashboard() {
   const [status, setStatus] = useState<"All statuses" | QueueStatus>("All statuses");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<OperationsBookingDetail | null>(null);
-  const [rulesDraft, setRulesDraft] = useState<Record<string, unknown>>({});
+  const [rulesJson, setRulesJson] = useState("{}");
+  const [tierOverride, setTierOverride] = useState("");
+  const [tierReason, setTierReason] = useState("");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
@@ -180,7 +184,7 @@ export default function OperationsDashboard() {
       setReconciliation(reconData);
       setMe(userData);
       setRules(ruleData);
-      setRulesDraft(asRecord(ruleData.value));
+      setRulesJson(JSON.stringify(ruleData.value, null, 2));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load operations data.");
     } finally {
@@ -202,7 +206,7 @@ export default function OperationsDashboard() {
         setReconciliation(reconData);
         setMe(userData);
         setRules(ruleData);
-        setRulesDraft(asRecord(ruleData.value));
+        setRulesJson(JSON.stringify(ruleData.value, null, 2));
       })
       .catch((err) => {
         if (active) setError(err instanceof Error ? err.message : "Unable to load operations data.");
@@ -222,7 +226,11 @@ export default function OperationsDashboard() {
     let active = true;
     getOperationsBookingById(selectedId)
       .then((data) => {
-        if (active) setDetail(data);
+        if (active) {
+          setDetail(data);
+          setTierOverride(text(asRecord(data.customer).trust_tier_override, ""));
+          setTierReason("");
+        }
       })
       .catch((err) => {
         if (active) setError(err instanceof Error ? err.message : "Unable to load booking detail.");
@@ -308,29 +316,43 @@ export default function OperationsDashboard() {
     }
   };
 
+  const saveTierOverride = async () => {
+    const customerId = text(selectedCustomer?.id, "");
+    if (!customerId || tierReason.trim().length < 10) {
+      setError("Provide an override reason of at least 10 characters.");
+      return;
+    }
+    setActionLoading("tier");
+    try {
+      await updateOperationsCustomerTrustTier(customerId, {
+        tier: (tierOverride || null) as "OBSERVER" | "EXPLORER" | "VOYAGER" | "NAVIGATOR" | "AMBASSADOR" | null,
+        reason: tierReason.trim(),
+      });
+      setDetail(await getOperationsBookingById(selectedId!));
+      setToast(tierOverride ? "Trust-tier override saved" : "Trust-tier override cleared");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update trust tier.");
+    } finally {
+      setActionLoading("");
+    }
+  };
+
   const saveRules = async () => {
     setActionLoading("rules");
     try {
+      const parsed = JSON.parse(rulesJson) as Record<string, unknown>;
       const saved = await updateOperationsRules({
-        value: rulesDraft,
+        value: parsed,
         description: "MVP flexible payment rules updated from operations dashboard.",
       });
       setRules(saved);
-      setRulesDraft(asRecord(saved.value));
+      setRulesJson(JSON.stringify(saved.value, null, 2));
       setToast("Rules saved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save rules.");
     } finally {
       setActionLoading("");
     }
-  };
-
-  const updateRule = (key: string, value: string) => {
-    const numeric = Number(value);
-    setRulesDraft((current) => ({
-      ...current,
-      [key]: value === "" || Number.isNaN(numeric) ? value : numeric,
-    }));
   };
 
   return (
@@ -516,10 +538,10 @@ export default function OperationsDashboard() {
                   </button>
                 </div>
                 <DetailList rows={[
-                  ["Deposit rate", `${Number(ruleValue.flex_deposit_rate || 0) * 100}%`],
+                  ["Deposit rate", "Tier and route based"],
                   ["Full fee", `${Number(ruleValue.full_service_fee_rate || 0) * 100}%`],
-                  ["Domestic installments", ruleValue.domestic_max_installments],
-                  ["International installments", ruleValue.regional_international_max_installments],
+                  ["Domestic installments", asRecord(ruleValue.max_installments).domestic],
+                  ["International installments", asRecord(ruleValue.max_installments).international],
                 ]} />
               </article>
               <article className="ops-card">
@@ -558,14 +580,10 @@ export default function OperationsDashboard() {
                   {actionLoading === "rules" ? "Saving" : "Save rules"}
                 </button>
               </div>
-              <div className="ops-rule-grid">
-                {Object.entries(rulesDraft).map(([key, value]) => (
-                  <label key={key} className="ops-rule-field">
-                    <span>{key}</span>
-                    <input value={text(value, "")} onChange={(event) => updateRule(key, event.target.value)} />
-                  </label>
-                ))}
-              </div>
+              <label className="ops-rules-json">
+                <span>Versioned financing rule JSON</span>
+                <textarea value={rulesJson} onChange={(event) => setRulesJson(event.target.value)} spellCheck={false} />
+              </label>
             </section>
           )}
         </div>
@@ -597,10 +615,16 @@ export default function OperationsDashboard() {
                     <h3><Plane size={15} /> Booking</h3>
                     <DetailList rows={[
                       ["Type", selectedBooking?.booking_type],
+                      ["Route", selectedBooking?.route_category],
+                      ["Trust tier", detail.financing_profile?.effective_tier || selectedBooking?.trust_tier_at_booking],
+                      ["Ticket", selectedBooking?.ticket_type],
                       ["Total", money(selectedBooking?.total_amount)],
                       ["Paid", money(selectedBooking?.amount_paid)],
                       ["Deposit", money(selectedBooking?.deposit_amount)],
                       ["Provider ref", selectedBooking?.provider_reference],
+                      ["Repayment deadline", selectedBooking?.repayment_deadline],
+                      ["Grace deadline", selectedBooking?.grace_deadline],
+                      ["Post-travel", money(selectedBooking?.post_travel_amount)],
                     ]} />
                   </article>
                   <article>
@@ -618,7 +642,7 @@ export default function OperationsDashboard() {
                     <div className="ops-mini-list">
                       {detail.installments.map((installment) => {
                         const row = asRecord(installment);
-                        return <div key={text(row.id)}><strong>#{text(row.sequence_number)} {money(row.amount)}</strong><span>{text(row.status)} · paid {money(row.paid_amount)}</span></div>;
+                        return <div key={text(row.id)}><strong>#{text(row.sequence_number)} {money(row.amount)}</strong><span>{text(row.phase)} · due {text(row.due_date)} · {text(row.status)} · paid {money(row.paid_amount)}</span></div>;
                       })}
                       {detail.installments.length === 0 && <span>No installments</span>}
                     </div>
@@ -632,6 +656,24 @@ export default function OperationsDashboard() {
                       })}
                       {detail.ledger_entries.length === 0 && <span>No booking ledger entries</span>}
                     </div>
+                  </article>
+                  <article>
+                    <h3><ShieldCheck size={15} /> Trust tier</h3>
+                    <DetailList rows={[
+                      ["Computed", detail.financing_profile?.computed_tier],
+                      ["Effective", detail.financing_profile?.effective_tier],
+                      ["Successful cycles", detail.financing_profile?.successful_cycles],
+                      ["On-time rate", `${Math.round(Number(detail.financing_profile?.on_time_repayment_rate || 0) * 100)}%`],
+                    ]} />
+                    <label className="ops-rule-field ops-tier-control">
+                      <span>Admin override</span>
+                      <select value={tierOverride} onChange={(event) => setTierOverride(event.target.value)}>
+                        <option value="">No override</option>
+                        {['OBSERVER','EXPLORER','VOYAGER','NAVIGATOR','AMBASSADOR'].map((tier) => <option key={tier} value={tier}>{tier}</option>)}
+                      </select>
+                      <input value={tierReason} onChange={(event) => setTierReason(event.target.value)} placeholder="Audited reason (minimum 10 characters)" />
+                      <button className="ops-secondary-button" onClick={saveTierOverride} disabled={actionLoading === "tier"}>Save override</button>
+                    </label>
                   </article>
                 </div>
                 <div className="ops-modal-actions">

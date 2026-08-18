@@ -3,6 +3,8 @@ import { z } from "zod";
 import { PaymentIntentCreateInput } from "@/lib/api-contracts";
 import { requireAgentCustomer } from "@/lib/auth/agent";
 import { bad, failure } from "@/lib/api-utils";
+import { loadFinancingRules } from "@/lib/financing-rules";
+import { evaluateRepaymentLifecycle } from "@/lib/trust-financing";
 
 function money(value: number | string | null | undefined) {
   return Math.round(Number(value || 0) * 100) / 100;
@@ -58,6 +60,8 @@ export async function POST(request: Request) {
 
     let bookingMetadata: Record<string, unknown> = {};
     if (input.booking_id) {
+      const rules = await loadFinancingRules(supabase);
+      await evaluateRepaymentLifecycle(supabase, customer.id, rules, input.booking_id);
       const { data: booking, error: bookingError } = await supabase
         .from("bookings")
         .select("id,booking_type,status,total_amount,deposit_amount,balance_amount")
@@ -68,7 +72,7 @@ export async function POST(request: Request) {
       if (!booking) {
         return NextResponse.json({ error: "Booking not found" }, { status: 404 });
       }
-      if (["CANCELLED", "REFUNDED", "FAILED"].includes(booking.status)) {
+      if (["CANCELLED", "CANCELLATION_REVIEW", "CANCELLATION_PENDING", "REFUNDED", "FAILED"].includes(booking.status)) {
         return NextResponse.json(
           { error: "Booking cannot accept payment" },
           { status: 409 },

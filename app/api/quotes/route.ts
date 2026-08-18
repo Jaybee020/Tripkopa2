@@ -9,6 +9,9 @@ import {
   priceQuote,
   selectOffer,
 } from "@/lib/flexible-payments";
+import { loadFinancingRules } from "@/lib/financing-rules";
+import { refreshCustomerTrustTier } from "@/lib/trust-financing";
+import { normalizeFareRules } from "@/lib/ticket-rules";
 
 function resultShape(value: unknown) {
   if (Array.isArray(value)) return { type: "array", length: value.length };
@@ -104,6 +107,10 @@ export async function POST(request: Request) {
     }
 
     const currency = extractOfferCurrency(offer, input.currency);
+    const rules = await loadFinancingRules(supabase);
+    const trust = input.booking_type === "flexible"
+      ? await refreshCustomerTrustTier(supabase, customer.id)
+      : null;
     const pricing = priceQuote({
       origin: search.origin,
       destination: search.destination,
@@ -112,7 +119,12 @@ export async function POST(request: Request) {
       currency,
       bookingType: input.booking_type,
       installmentCount: input.installment_count,
+      repaymentPlanRequest: input.repayment_plan_request,
+      travelCompletionDate: search.return_date || search.departure_date,
+      trustTier: trust?.effective_tier,
+      rules,
     });
+    const fareRules = normalizeFareRules(offer);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     const { data, error } = await supabase
@@ -128,6 +140,9 @@ export async function POST(request: Request) {
         deposit_amount: pricing.deposit_amount,
         installment_amount: pricing.installment_amount,
         rule_version: pricing.rule_version,
+        route_category: pricing.route_category,
+        trust_tier: pricing.trust_tier,
+        repayment_deadline: pricing.repayment_plan?.repayment_deadline || null,
         version: 1,
         status: "ACTIVE",
         expires_at: expiresAt,
@@ -144,6 +159,18 @@ export async function POST(request: Request) {
           },
           booking_type: input.booking_type,
           pricing,
+          fare_rules: fareRules,
+          rules_snapshot: rules,
+          customer_summary: pricing.repayment_plan
+            ? {
+                trust_tier: pricing.trust_tier,
+                total_payable: pricing.total_amount,
+                initial_deposit: pricing.deposit_amount,
+                outstanding_balance: Number((pricing.total_amount - (pricing.deposit_amount || 0)).toFixed(2)),
+                repayment_deadline: pricing.repayment_plan.repayment_deadline,
+                post_travel_amount: pricing.repayment_plan.post_travel_amount,
+              }
+            : { total_payable: pricing.total_amount },
         },
       })
       .select("*")

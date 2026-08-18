@@ -6,7 +6,6 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   Check,
-  ChevronDown,
   Clipboard,
   FileCheck2,
   KeyRound,

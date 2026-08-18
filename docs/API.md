@@ -110,6 +110,7 @@ Many records come directly from Postgres. Decimal amount fields may therefore be
 | `GET` | `/api/me/profile` | Agent | Alias for `GET /api/me` |
 | `PATCH` | `/api/me/profile` | Agent | Alias for `PATCH /api/me` |
 | `GET` | `/api/me/kyc` | Agent | Return the most recent KYC state |
+| `GET` | `/api/me/financing` | Agent | Evaluate deadlines and return the customer's public financing profile |
 | `POST` | `/api/kyc/sessions` | Agent | Create a 10-minute KYC link |
 | `POST` | `/api/kyc/sessions/exchange` | One-time token | Exchange the link token for a KYC cookie |
 | `GET` | `/api/kyc/sessions/{session_id}` | KYC | Read a KYC session |
@@ -125,6 +126,7 @@ Many records come directly from Postgres. Decimal amount fields may therefore be
 | `GET` | `/api/bookings/{booking_id}/itinerary` | Agent | Read an itinerary |
 | `GET` | `/api/bookings/{booking_id}/repayment` | Agent | List a booking's installments |
 | `GET` | `/api/installments/{installment_id}` | Agent | Read one installment |
+| `POST` | `/api/installments/{installment_id}` | Agent | Record that a repayment reminder was sent |
 | `GET` | `/api/wallet` | Agent | Read wallet and virtual-account details |
 | `GET` | `/api/wallet/ledger` | Agent | List wallet ledger entries |
 | `POST` | `/api/payments/intents` | Agent | Create idempotent bank-transfer instructions |
@@ -138,6 +140,8 @@ Many records come directly from Postgres. Decimal amount fields may therefore be
 | `POST` | `/api/operations/bookings/{booking_id}/resolve` | Staff + role | Resolve an operational booking/case |
 | `GET` | `/api/operations/rules` | Staff + role | Read MVP flexible-payment rule config |
 | `PUT` | `/api/operations/rules` | Admin role | Update MVP flexible-payment rule config |
+| `PUT` | `/api/operations/customers/{customer_id}/trust-tier` | Admin role | Set or clear an audited trust-tier override |
+| `POST/PATCH` | `/api/operations/customers/{customer_id}/risk-events` | Staff + role | Create or resolve an audited behavioral risk event |
 | `GET` | `/api/operations/reconciliation` | Staff | List reconciliation records |
 | `POST` | `/api/webhooks/payments/onecap` | OneCap signature | Process a successful virtual-account deposit |
 | `POST` | `/api/webhooks/payments/paystack` | Paystack signature | Store a Paystack event |
@@ -357,7 +361,8 @@ curl -X POST "$TRIPKOPA_URL/api/flights/searches" \
     "cabin_class":"Economy",
     "direct":false,
     "all_providers":true,
-    "payment_preference":"flexible"
+    "payment_preference":"flexible",
+    "ticket_type":"refundable"
   }'
 ```
 
@@ -382,6 +387,7 @@ Rules and defaults:
 | `direct` | No | Boolean; default `false` |
 | `all_providers` | No | Boolean; default `true` |
 | `payment_preference` | No | `full` (default) or `flexible` |
+| `ticket_type` | No | `refundable`, `nonrefundable`, or `any` (default); confirmed provider results are filtered when requested |
 
 The backend sends this full TakeTrips query by default:
 
@@ -412,7 +418,11 @@ curl -X POST "$TRIPKOPA_URL/api/quotes" \
     "offer_index":0,
     "base_amount":120000,
     "currency":"NGN",
-    "installment_count":4
+    "repayment_plan_request": {
+      "mode":"generated",
+      "frequency":"weekly",
+      "installment_count":4
+    }
   }'
 ```
 
@@ -427,12 +437,13 @@ Fields:
 | `base_amount` | Sometimes | Positive number; required when the backend cannot infer price from the offer |
 | `currency` | No | Three-letter code, default `NGN` |
 | `installment_count` | No | Positive integer up to `8`; capped by MVP route rules |
+| `repayment_plan_request` | No | Generated weekly/monthly plan, or custom amount/date rows; replaces legacy `installment_count` |
 
 Do not send placeholder values for unknown optional fields. Omit `offer` instead of sending `{}`, omit `base_amount` instead of sending `0`, and omit `installment_count` instead of sending `0`. The backend treats those placeholder values as omitted, then attempts to use the selected stored offer.
 
 If the provider response uses an unsupported price shape, the endpoint returns `400` with `offer_shape` and `result_shape` metadata. In that case, retry with a positive `base_amount` from the selected offer.
 
-Full-payment quotes apply a 5% MVP service fee. Flexible quotes apply MVP markup/deposit rules, save a versioned repayment plan under `details.pricing.repayment_plan`, and return a `quote` with fields such as:
+Full-payment quotes apply a 5% service fee. Flexible quotes use the customer's trust tier, route category, financing window, marked-up-total cap, and versioned rules. Generated schedules end 14 days before departure; custom schedules must end at least 10 days before departure. The quote stores the complete plan under `details.pricing.repayment_plan`.
 
 ```json
 {
@@ -441,17 +452,21 @@ Full-payment quotes apply a 5% MVP service fee. Flexible quotes apply MVP markup
   "currency": "NGN",
   "base_amount": "120000",
   "total_amount": "129000",
-  "deposit_amount": "38700",
-  "installment_amount": "22575",
-  "rule_version": "flex_mvp_2026_08",
+  "deposit_amount": "45150",
+  "installment_amount": "20962.50",
+  "rule_version": "flex_v2_2026_08",
   "expires_at": "2026-08-12T12:10:00.000Z",
   "details": {
     "booking_type": "flexible",
     "pricing": {
       "repayment_plan": {
-        "deposit_amount": 38700,
+        "deposit_amount": 45150,
+        "plan_mode":"generated",
+        "frequency":"weekly",
+        "repayment_deadline":"2026-10-10",
+        "generated_deadline":"2026-10-06",
         "installments": [
-          {"sequence_number":1,"due_date":"2026-08-19","amount":22575}
+          {"sequence_number":1,"due_date":"2026-09-15","amount":20962.50,"phase":"PRE_TRAVEL"}
         ]
       }
     }
@@ -546,6 +561,7 @@ GET /api/bookings/{booking_id}
 GET /api/bookings/{booking_id}/itinerary
 GET /api/bookings/{booking_id}/repayment
 GET /api/installments/{installment_id}
+POST /api/installments/{installment_id}
 ```
 
 The itinerary response contains `booking_id`, `release_level`, `segments`, and possibly `ticket_reference`. The repayment response is:
@@ -560,11 +576,23 @@ The itinerary response contains `booking_id`, `release_level`, `segments`, and p
       "due_date": "2026-08-20",
       "amount": "25000.00",
       "paid_amount": "0.00",
-      "status": "PENDING"
+      "status": "PENDING",
+      "phase": "PRE_TRAVEL",
+      "reminder_count": 0
     }
   ]
 }
 ```
+
+Repayment and financing reads evaluate due dates before returning. Installments may transition to `OVERDUE`, `GRACE`, or `DEFAULTED`; a final default moves the booking to `CANCELLATION_REVIEW`. The reminder endpoint requires an `Idempotency-Key` header, updates the lifetime reminder metric once per logical reminder, and records an operational event.
+
+### Financing profile
+
+```http
+GET /api/me/financing
+```
+
+Returns the computed and effective public tier, successful cycles, lifetime on-time and reminder rates, KYC state, route-specific deposit rates and caps, the maximum post-travel percentage, and the active rule version. Internal risk events and scoring inputs are not returned.
 
 ## Wallet, payments, and events
 
@@ -818,19 +846,25 @@ PUT /api/operations/rules
 ```json
 {
   "value": {
-    "rule_version": "flex_mvp_2026_08",
+    "rule_version": "flex_v2_2026_08",
     "full_service_fee_rate": 0.05,
-    "flex_deposit_rate": 0.3,
-    "domestic_max_installments": 4,
-    "regional_international_max_installments": 8,
-    "final_payment_due_days_before_departure": 10,
-    "grace_period_days": 3
+    "max_financing_weeks": {"domestic":12,"regional":16,"international":24},
+    "max_installments": {"domestic":4,"regional":6,"international":8},
+    "repayment_due_days_before_departure": 10,
+    "generated_due_days_before_departure": 14,
+    "grace_period_days": 3,
+    "grace_hard_stop_days_before_departure": 7,
+    "post_travel_max_days": 90,
+    "markup": "route bracket arrays",
+    "deposit_rates": "tier-by-route matrix",
+    "financing_caps": "tier-by-route matrix",
+    "post_travel_rates": "tier matrix"
   },
-  "description": "MVP flexible payment rules."
+  "description": "Trust-based financing rules."
 }
 ```
 
-The dashboard persists these values in `admin_rule_configs`. The current quote-pricing helper still uses the code defaults; wiring quote calculation directly to database-backed rules is the next step before non-MVP pricing changes should be operated from the dashboard.
+The value must contain the complete rule document; the abbreviated strings above represent the complete matrices returned by `GET`. Quotes read this live configuration and store an immutable snapshot. Every update must use a new `rule_version`; versions are recorded in `admin_rule_config_versions` and cannot be overwritten.
 
 ## Provider webhooks
 

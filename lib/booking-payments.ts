@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/services/supabase";
 import { taketrips } from "@/lib/services/taketrips";
+import { refreshCustomerTrustTier } from "@/lib/trust-financing";
 
 type PaymentRow = {
   id: string;
@@ -25,6 +26,7 @@ type BookingRow = {
   passengers: unknown[];
   flight_details: unknown;
   provider_reference?: string | null;
+  post_travel_amount?: number | string | null;
 };
 
 type InstallmentRow = {
@@ -108,6 +110,7 @@ async function maybeTicketBooking(booking: BookingRow, payment: PaymentRow) {
         },
         ticket_reference:
           releaseLevel === "FULL" ? ordered.ticket_reference : null,
+        provider_ticket_reference: ordered.ticket_reference,
       });
     if (itineraryError) throw itineraryError;
 
@@ -173,10 +176,47 @@ async function applyToInstallments(booking: BookingRow, amount: number) {
     const status = paidAmount >= money(installment.amount) ? "PAID" : "PARTIALLY_PAID";
     const { error: updateError } = await supabase.admin
       .from("installments")
-      .update({ paid_amount: paidAmount, status })
+      .update({
+        paid_amount: paidAmount,
+        status,
+        ...(status === "PAID" && installment.status !== "PAID"
+          ? { paid_at: new Date().toISOString() }
+          : {}),
+      })
       .eq("id", installment.id);
     if (updateError) throw updateError;
   }
+}
+
+async function maybeReleaseFullItinerary(booking: BookingRow, amountPaid: number) {
+  if (booking.booking_type !== "flexible") return;
+  const preTravelThreshold = roundMoney(
+    money(booking.total_amount) - money(booking.post_travel_amount),
+  );
+  if (amountPaid < preTravelThreshold) return;
+  const { data: itinerary, error } = await supabase.admin
+    .from("itineraries")
+    .select("id,release_level,provider_ticket_reference")
+    .eq("booking_id", booking.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!itinerary || itinerary.release_level === "FULL") return;
+  const { error: updateError } = await supabase.admin
+    .from("itineraries")
+    .update({
+      release_level: "FULL",
+      ticket_reference: itinerary.provider_ticket_reference,
+    })
+    .eq("id", itinerary.id);
+  if (updateError) throw updateError;
+  await supabase.admin.from("operational_events").insert({
+    customer_id: booking.customer_id,
+    booking_id: booking.id,
+    event_type: "itinerary.fully_released",
+    payload: { post_travel_balance: money(booking.post_travel_amount) },
+  });
 }
 
 export async function applyBookingPayment(paymentId: string) {
@@ -319,6 +359,8 @@ export async function applyBookingPayment(paymentId: string) {
     updatedBooking as BookingRow,
     typedPayment,
   );
+  await maybeReleaseFullItinerary(updatedBooking as BookingRow, nextAmountPaid);
+  await refreshCustomerTrustTier(supabase.admin, typedPayment.customer_id);
 
   return {
     applied: true,

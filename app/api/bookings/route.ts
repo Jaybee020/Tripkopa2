@@ -7,13 +7,25 @@ import { bad, failure } from "@/lib/api-utils";
 type QuoteDetails = {
   offer?: unknown;
   booking_type?: string;
+  fare_rules?: { ticket_type?: string } & Record<string, unknown>;
+  search?: {
+    departure_date?: string;
+    return_date?: string | null;
+  };
   pricing?: {
+    route_category?: string | null;
+    trust_tier?: string | null;
     repayment_plan?: {
       deposit_amount: number;
+      repayment_deadline: string;
+      grace_deadline: string;
+      post_travel_amount: number;
+      post_travel_deadline: string | null;
       installments: Array<{
         sequence_number: number;
         due_date: string;
         amount: number;
+        phase: "PRE_TRAVEL" | "POST_TRAVEL";
       }>;
     } | null;
   };
@@ -42,6 +54,15 @@ export async function POST(request: Request) {
     }
 
     const details = quote.details as QuoteDetails;
+    if (details.booking_type && details.booking_type !== input.booking_type) {
+      return NextResponse.json({ error: "Booking type does not match the quote" }, { status: 409 });
+    }
+    if ((input.quote_version ?? 1) !== quote.version) {
+      return NextResponse.json(
+        { error: "Accept the latest quote version before booking", current_version: quote.version },
+        { status: 409 },
+      );
+    }
     const repaymentPlan = details.pricing?.repayment_plan;
     if (input.booking_type === "flexible" && !repaymentPlan) {
       return NextResponse.json(
@@ -69,6 +90,16 @@ export async function POST(request: Request) {
         amount_paid: 0,
         balance_amount: quote.total_amount,
         rule_version: quote.rule_version,
+        route_category: quote.route_category || details.pricing?.route_category || null,
+        trust_tier_at_booking: quote.trust_tier || details.pricing?.trust_tier || null,
+        ticket_type: details.fare_rules?.ticket_type || "unconfirmed",
+        fare_rules: details.fare_rules || null,
+        departure_date: details.search?.departure_date || null,
+        travel_completion_date: details.search?.return_date || details.search?.departure_date || null,
+        repayment_deadline: repaymentPlan?.repayment_deadline || null,
+        grace_deadline: repaymentPlan?.grace_deadline || null,
+        post_travel_amount: repaymentPlan?.post_travel_amount || 0,
+        post_travel_deadline: repaymentPlan?.post_travel_deadline || null,
         passengers: input.passengers,
         flight_details: details.offer ?? quote.details,
       })
@@ -86,6 +117,12 @@ export async function POST(request: Request) {
             sequence_number: installment.sequence_number,
             due_date: installment.due_date,
             amount: installment.amount,
+            phase: installment.phase,
+            grace_due_date:
+              installment.phase === "PRE_TRAVEL" &&
+              installment.sequence_number === repaymentPlan.installments.filter((item) => item.phase === "PRE_TRAVEL").at(-1)?.sequence_number
+                ? repaymentPlan.grace_deadline
+                : null,
             paid_amount: 0,
             status: "PENDING",
           })),

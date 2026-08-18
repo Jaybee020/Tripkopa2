@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireOperationsStaff } from "@/lib/auth/operations";
 import { supabase as serviceSupabase } from "@/lib/services/supabase";
 import { bad, failure } from "@/lib/api-utils";
+import { DEFAULT_FINANCING_RULES, parseFinancingRules } from "@/lib/financing-rules";
 
 const RuleInput = z
   .object({
@@ -11,15 +12,7 @@ const RuleInput = z
   })
   .strict();
 
-const DEFAULT_RULE = {
-  rule_version: "flex_mvp_2026_08",
-  full_service_fee_rate: 0.05,
-  flex_deposit_rate: 0.3,
-  domestic_max_installments: 4,
-  regional_international_max_installments: 8,
-  final_payment_due_days_before_departure: 10,
-  grace_period_days: 3,
-};
+const DEFAULT_RULE = DEFAULT_FINANCING_RULES;
 
 export async function GET() {
   try {
@@ -52,12 +45,26 @@ export async function PUT(request: Request) {
         { status: 403 },
       );
     }
+    const rules = parseFinancingRules(input.value);
+    const { data: existingVersion, error: versionLookupError } = await serviceSupabase.admin
+      .from("admin_rule_config_versions")
+      .select("id")
+      .eq("key", "flex_mvp")
+      .eq("version", rules.rule_version)
+      .maybeSingle();
+    if (versionLookupError) throw versionLookupError;
+    if (existingVersion) {
+      return NextResponse.json(
+        { error: "Rule versions are immutable; provide a new rule_version" },
+        { status: 409 },
+      );
+    }
 
     const { data, error } = await serviceSupabase.admin
       .from("admin_rule_configs")
       .upsert({
         key: "flex_mvp",
-        value: input.value,
+        value: rules,
         description: input.description || "MVP flexible payment rules.",
         updated_by: user.id,
         updated_at: new Date().toISOString(),
@@ -65,6 +72,17 @@ export async function PUT(request: Request) {
       .select("*")
       .single();
     if (error) throw error;
+
+    const { error: versionError } = await serviceSupabase.admin
+      .from("admin_rule_config_versions")
+      .insert({
+        key: "flex_mvp",
+        version: rules.rule_version,
+        value: rules,
+        description: input.description || "Trust-based financing rules.",
+        created_by: user.id,
+      });
+    if (versionError) throw versionError;
 
     await serviceSupabase.admin.from("operation_audit_events").insert({
       staff_user_id: user.id,

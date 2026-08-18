@@ -3,12 +3,23 @@ import { z } from "zod";
 import { QuoteRevalidationInput } from "@/lib/api-contracts";
 import { requireAgentCustomer } from "@/lib/auth/agent";
 import { taketrips } from "@/lib/services/taketrips";
+import { extractOfferAmount, extractOfferCurrency, priceQuote, type RepaymentPlanRequest } from "@/lib/flexible-payments";
+import { loadFinancingRules } from "@/lib/financing-rules";
+import { refreshCustomerTrustTier } from "@/lib/trust-financing";
+import { normalizeFareRules } from "@/lib/ticket-rules";
 import { bad, failure } from "@/lib/api-utils";
 
 type QuoteDetails = {
   offer?: unknown;
-  pricing?: unknown;
-  search?: unknown;
+  pricing?: {
+    repayment_plan?: { request_snapshot?: RepaymentPlanRequest } | null;
+  };
+  search?: {
+    origin?: string;
+    destination?: string;
+    departure_date?: string;
+    return_date?: string | null;
+  };
   booking_type?: string;
   revalidation_error?: {
     message: string;
@@ -49,6 +60,12 @@ export async function POST(
       .eq("customer_id", customer.id)
       .single();
     if (error) throw error;
+    if (input.version && input.version !== quote.version) {
+      return NextResponse.json(
+        { error: "Quote version is stale", current_version: quote.version },
+        { status: 409 },
+      );
+    }
 
     const details = (quote.details ?? {}) as QuoteDetails;
     let provider: Record<string, unknown>;
@@ -83,9 +100,44 @@ export async function POST(
       );
     }
 
+    const baseAmount = extractOfferAmount(provider) ?? Number(quote.base_amount);
+    const search = details.search;
+    if (!search?.origin || !search.destination || !search.departure_date) {
+      return NextResponse.json({ error: "Quote search details are incomplete" }, { status: 409 });
+    }
+    const bookingType = details.booking_type === "flexible" ? "flexible" : "full";
+    const rules = await loadFinancingRules(supabase);
+    const trust = bookingType === "flexible"
+      ? await refreshCustomerTrustTier(supabase, customer.id)
+      : null;
+    let pricing;
+    try {
+      pricing = priceQuote({
+        origin: search.origin,
+        destination: search.destination,
+        departureDate: search.departure_date,
+        travelCompletionDate: search.return_date || search.departure_date,
+        baseAmount,
+        currency: extractOfferCurrency(provider, quote.currency),
+        bookingType,
+        trustTier: trust?.effective_tier,
+        rules,
+        repaymentPlanRequest: details.pricing?.repayment_plan?.request_snapshot,
+        rescaleCustomPlan: true,
+      });
+    } catch (pricingError) {
+      await supabase.from("quotes").update({ status: "REPRICE_REQUIRED" }).eq("id", quote_id);
+      return NextResponse.json(
+        { error: pricingError instanceof Error ? pricingError.message : "Repayment plan must be re-created", status: "REPRICE_REQUIRED" },
+        { status: 409 },
+      );
+    }
     const nextDetails = {
       ...details,
       offer: provider,
+      pricing,
+      fare_rules: normalizeFareRules(provider),
+      rules_snapshot: rules,
       revalidation_error: null,
       revalidated_at: new Date().toISOString(),
     };
@@ -94,8 +146,18 @@ export async function POST(
       .from("quotes")
       .update({
         details: nextDetails,
+        currency: extractOfferCurrency(provider, quote.currency),
+        base_amount: pricing.base_amount,
+        total_amount: pricing.total_amount,
+        deposit_amount: pricing.deposit_amount,
+        installment_amount: pricing.installment_amount,
+        rule_version: pricing.rule_version,
+        route_category: pricing.route_category,
+        trust_tier: pricing.trust_tier,
+        repayment_deadline: pricing.repayment_plan?.repayment_deadline || null,
         status: "ACTIVE",
-        version: (input.version || quote.version) + 1,
+        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        version: quote.version + 1,
       })
       .eq("id", quote_id)
       .eq("customer_id", customer.id)
