@@ -504,6 +504,31 @@ function isNonEmptyObject(value: unknown): value is Record<string, unknown> {
   );
 }
 
+export function listOffers(results: unknown): unknown[] {
+  if (Array.isArray(results)) return results;
+  if (!isNonEmptyObject(results) || results.status === false) return [];
+  const collections = [
+    results.offers,
+    results.flightOffers,
+    results.flight_offers,
+    results.flights,
+    results.results,
+    results.details,
+    results.data,
+    results.items,
+    isNonEmptyObject(results.data) ? results.data.offers : undefined,
+    isNonEmptyObject(results.data) ? results.data.flightOffers : undefined,
+    isNonEmptyObject(results.details) ? results.details.offers : undefined,
+    isNonEmptyObject(results.details) ? results.details.flightOffers : undefined,
+  ];
+  for (const collection of collections) {
+    if (Array.isArray(collection)) return collection;
+  }
+  if (isNonEmptyObject(results.details)) return [results.details];
+  if (isNonEmptyObject(results.data)) return [results.data];
+  return [results];
+}
+
 export function selectOffer(
   results: unknown,
   offerIndex?: number,

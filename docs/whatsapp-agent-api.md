@@ -171,6 +171,8 @@ Response:
 Possible statuses include `NOT_STARTED`, `PENDING`, `CONSENTED`, `VERIFIED`,
 and provider-specific failure/review states.
 
+When BVN verification and wallet provisioning complete successfully, the backend automatically sends a KYC confirmation to the email stored on the customer's profile. The email is idempotent and never contains the BVN. The returned session may include `success_email_status` and `success_email_sent_at`; a KYC-status read retries a previously failed confirmation email.
+
 ### Create KYC Session
 
 Creates a short-lived KYC link that the WhatsApp agent can send to the customer.
@@ -333,8 +335,7 @@ Response:
 
 ### Revalidate Quote
 
-Revalidates the selected provider offer before booking. The backend sends the
-saved TakeTrips offer object as the raw JSON body to TakeTrips validate.
+Revalidates the selected provider offer before booking. If the saved provider offer has expired, the backend automatically reconstructs the original flight search and attempts to recover the exact itinerary.
 
 ```http
 POST /api/quotes/{quote_id}/revalidate
@@ -348,19 +349,40 @@ Body:
 }
 ```
 
-If provider validation fails, the quote is marked `REPRICE_REQUIRED` and the API
-returns `409`:
+When the exact itinerary is recovered, the response contains a linked replacement quote:
 
 ```json
 {
-  "error": "Quote could not be revalidated",
-  "status": "REPRICE_REQUIRED",
-  "provider_error": "Validation Failed: Failed to Validate"
+  "status": "RECOVERED",
+  "recovery_reason": "PROVIDER_QUOTE_EXPIRED",
+  "previous_quote_id": "expired-quote-id",
+  "search_id": "refreshed-search-id",
+  "quote": {
+    "id": "replacement-quote-id",
+    "status": "ACTIVE",
+    "version": 1,
+    "total_amount": "180000"
+  },
+  "changes": {
+    "price_changed": true,
+    "deposit_changed": true,
+    "schedule_changed": true,
+    "itinerary_changed": false,
+    "ticket_rules_changed": false,
+    "requires_customer_acceptance": true
+  }
 }
 ```
 
-The agent should then ask the customer to choose another offer or run a new
-flight search.
+Use the replacement quote ID and version. Obtain acceptance when `requires_customer_acceptance` is true.
+
+Other handled responses are:
+
+- `ALTERNATIVES_REQUIRED`: present `alternatives` from the returned refreshed `search_id`; do not recollect trip details.
+- `REPAYMENT_PLAN_REQUIRED`: retain the returned search and matched offer, then collect only the required plan adjustment.
+- `KYC_REQUIRED`: complete KYC and continue from the preserved search.
+
+HTTP `409` with `recovery_reason: RECOVERY_FAILED` means automatic recovery itself could not run. Retry once, then escalate without asking the customer to restart.
 
 ## Bookings
 
@@ -435,7 +457,7 @@ Response:
 }
 ```
 
-`GET` evaluates overdue and grace state before returning. After the agent actually sends a reminder, call `POST /api/installments/{installment_id}` with a unique `Idempotency-Key` for that logical reminder to record it for behavioral history.
+`GET` evaluates overdue and grace state before returning. Repayment-reminder emails are sent automatically by the protected backend cron according to the installment due dates. The WhatsApp agent does not trigger or record these emails and should not be given a reminder-send tool.
 
 ## Wallet
 

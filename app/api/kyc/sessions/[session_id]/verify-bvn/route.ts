@@ -4,6 +4,7 @@ import { requireKycSessionAccess } from "@/lib/auth/kyc";
 import { qoreid } from "@/lib/services/qoreid";
 import { onecap } from "@/lib/services/onecap";
 import { bad, failure } from "@/lib/api-utils";
+import { sendKycSuccessEmail } from "@/lib/kyc-notifications";
 
 const Input = z.object({ bvn: z.string().regex(/^\d{11}$/) }).strict();
 
@@ -275,6 +276,16 @@ export async function POST(
         logBvnError("mark_existing_account_kyc_verified", kycError, context);
         throw kycError;
       }
+      try {
+        await sendKycSuccessEmail(supabase, session_id, {
+          id: customer.id,
+          email: profile.email,
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+        });
+      } catch (emailError) {
+        logBvnError("send_kyc_success_email", emailError, context);
+      }
       return NextResponse.json({ status: "success", virtual_account: existing });
     }
     if (existing?.status === "PROVISIONING") {
@@ -371,6 +382,17 @@ export async function POST(
       if (kycError) {
         logBvnError("mark_kyc_verified", kycError, context);
         throw kycError;
+      }
+
+      try {
+        await sendKycSuccessEmail(supabase, session_id, {
+          id: customer.id,
+          email: profile.email,
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+        });
+      } catch (emailError) {
+        logBvnError("send_kyc_success_email", emailError, context);
       }
 
       return NextResponse.json(

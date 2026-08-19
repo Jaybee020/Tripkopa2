@@ -5,7 +5,7 @@
 // pages and IntegrationAgent should import from here instead of
 // rolling their own fetch() calls.
 
-import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FinancingProfile, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingDetail, OperationsBookingList, OperationsRuleConfig, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuoteRevalidationInput, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
+import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FinancingProfile, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingDetail, OperationsBookingList, OperationsRuleConfig, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuoteRevalidationInput, QuoteRevalidationResult, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
@@ -119,8 +119,8 @@ export async function getQuotesByQuoteId(context: AgentRequestContext, quote_id:
   return request<Quote>("GET", `/api/quotes/${quote_id}`, undefined, agentHeaders(context));
 }
 
-export async function postQuotesRevalidateByQuoteId(context: AgentRequestContext, quote_id: string, body: QuoteRevalidationInput): Promise<Quote> {
-  return request<Quote>("POST", `/api/quotes/${quote_id}/revalidate`, body, agentHeaders(context));
+export async function postQuotesRevalidateByQuoteId(context: AgentRequestContext, quote_id: string, body: QuoteRevalidationInput): Promise<QuoteRevalidationResult> {
+  return request<QuoteRevalidationResult>("POST", `/api/quotes/${quote_id}/revalidate`, body, agentHeaders(context));
 }
 
 export async function createBookings(context: AgentRequestContext, body: BookingCreateInput): Promise<Booking> {
@@ -161,10 +161,6 @@ export async function postPaymentsRefundsByPaymentId(context: AgentRequestContex
 
 export async function getInstallmentsByInstallmentId(context: AgentRequestContext, installment_id: string): Promise<Installment> {
   return request<Installment>("GET", `/api/installments/${installment_id}`, undefined, agentHeaders(context));
-}
-
-export async function recordInstallmentReminder(context: AgentRequestContext, installment_id: string, idempotencyKey: string): Promise<Installment> {
-  return request<Installment>("POST", `/api/installments/${installment_id}`, {}, { ...agentHeaders(context), "Idempotency-Key": idempotencyKey });
 }
 
 export async function createWebhooksPaymentsPaystack(body: PaystackWebhookInput): Promise<unknown> {

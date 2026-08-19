@@ -147,6 +147,15 @@
       "handler_file": "app/api/flights/searches/[search_id]/route.ts"
     },
     {
+      "method": "POST",
+      "path": "/api/quotes",
+      "purpose": "Create a full-payment or trust-based flexible-payment quote from a selected stored flight offer.",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": "QuoteCreateInput",
+      "response_schema_name": "Quote",
+      "handler_file": "app/api/quotes/route.ts"
+    },
+    {
       "method": "GET",
       "path": "/api/quotes/[quote_id]",
       "purpose": "",
@@ -161,7 +170,7 @@
       "purpose": "",
       "auth": "agent_api_key_and_whatsapp_identity",
       "request_schema_name": "QuoteRevalidationInput",
-      "response_schema_name": "Quote",
+      "response_schema_name": "QuoteRevalidationResult",
       "handler_file": "app/api/quotes/[quote_id]/revalidate/route.ts"
     },
     {
@@ -255,13 +264,13 @@
       "handler_file": "app/api/installments/[installment_id]/route.ts"
     },
     {
-      "method": "POST",
-      "path": "/api/installments/[installment_id]",
-      "purpose": "Record a repayment reminder for behavioral reliability metrics.",
-      "auth": "agent_api_key_and_whatsapp_identity",
+      "method": "GET",
+      "path": "/api/cron/repayment-reminders",
+      "purpose": "Evaluate repayment schedules and send idempotent reminder emails on configured due-date offsets.",
+      "auth": "cron_secret",
       "request_schema_name": null,
-      "response_schema_name": "Installment",
-      "handler_file": "app/api/installments/[installment_id]/route.ts"
+      "response_schema_name": null,
+      "handler_file": "app/api/cron/repayment-reminders/route.ts"
     },
     {
       "method": "POST",

@@ -250,6 +250,48 @@ export const QuoteRevalidationInput = z.object({
   version: z.number().int().positive().optional(),
 });
 export type QuoteRevalidationInput = z.infer<typeof QuoteRevalidationInput>;
+const QuoteRecoveryChanges = z.object({
+  price_changed: z.boolean(),
+  deposit_changed: z.boolean(),
+  schedule_changed: z.boolean(),
+  itinerary_changed: z.boolean(),
+  ticket_rules_changed: z.boolean(),
+  requires_customer_acceptance: z.boolean(),
+});
+export const QuoteRevalidationResult = z.union([
+  Quote,
+  z.object({
+    status: z.literal("RECOVERED"),
+    recovery_reason: z.string(),
+    previous_quote_id: Id,
+    search_id: Id,
+    quote: Quote,
+    changes: QuoteRecoveryChanges,
+  }).passthrough(),
+  z.object({
+    status: z.literal("ALTERNATIVES_REQUIRED"),
+    recovery_reason: z.string(),
+    previous_quote_id: Id,
+    search_id: Id,
+    alternatives: Any,
+    offer_count: z.number().int().nonnegative(),
+  }).passthrough(),
+  z.object({
+    status: z.literal("REPAYMENT_PLAN_REQUIRED"),
+    recovery_reason: z.string(),
+    previous_quote_id: Id,
+    search_id: Id,
+    matched_offer_index: z.number().int().nonnegative(),
+    error: z.string(),
+  }).passthrough(),
+  z.object({
+    status: z.literal("KYC_REQUIRED"),
+    recovery_reason: z.string(),
+    previous_quote_id: Id,
+    search_id: Id,
+  }).passthrough(),
+]);
+export type QuoteRevalidationResult = z.infer<typeof QuoteRevalidationResult>;
 export const BookingCreateInput = z.object({
   quote_id: Id,
   booking_type: z.enum(["full", "flexible"]),

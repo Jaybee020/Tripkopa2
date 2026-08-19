@@ -126,7 +126,6 @@ Many records come directly from Postgres. Decimal amount fields may therefore be
 | `GET` | `/api/bookings/{booking_id}/itinerary` | Agent | Read an itinerary |
 | `GET` | `/api/bookings/{booking_id}/repayment` | Agent | List a booking's installments |
 | `GET` | `/api/installments/{installment_id}` | Agent | Read one installment |
-| `POST` | `/api/installments/{installment_id}` | Agent | Record that a repayment reminder was sent |
 | `GET` | `/api/wallet` | Agent | Read wallet and virtual-account details |
 | `GET` | `/api/wallet/ledger` | Agent | List wallet ledger entries |
 | `POST` | `/api/payments/intents` | Agent | Create idempotent bank-transfer instructions |
@@ -229,7 +228,7 @@ Otherwise, `session` contains `status`, `provider`, `expires_at`, and `normalize
 
 ## KYC workflow
 
-The expected sequence is create session → open returned link → exchange token → consent → verify BVN. Complete the customer's first name, last name, and email before BVN verification.
+The expected sequence is create session → open returned link → exchange token → consent → verify BVN. Complete the customer's full legal first, middle, and last names and email before BVN verification. After verification and wallet provisioning succeed, the backend sends an idempotent KYC-success email through Resend. The message never contains the customer's BVN. A later KYC-status read retries the confirmation if its earlier delivery attempt failed.
 
 ### 1. Create a KYC session
 
@@ -497,24 +496,41 @@ Body is optional in meaning but must be valid JSON; send `{}` or a positive inte
 {"version":2}
 ```
 
-The provider validates the saved quote details. The backend sends the saved
-TakeTrips offer object as the raw JSON body to
-`/resellers/flights/validate`. The API updates the quote to `ACTIVE`, replaces
-its details, and increments its version.
+The provider validates the saved quote details. When validation succeeds, the API updates the quote to `ACTIVE`, replaces its details, refreshes its ten-minute expiry, and increments its version.
 
-If TakeTrips rejects the saved offer during validation, the API marks the quote
-`REPRICE_REQUIRED` and returns `409`:
+When the provider rejects an expired or unavailable offer, the backend automatically repeats the original stored flight search, preserving route, dates, passenger composition, cabin, direct-flight setting, provider setting, and ticket preference. It then compares strict itinerary fingerprints containing carrier, flight number, airports, and timestamps.
+
+If the exact itinerary is found and validates, the backend creates a new linked quote rather than rewriting the old audit record:
 
 ```json
 {
-  "error": "Quote could not be revalidated",
-  "status": "REPRICE_REQUIRED",
-  "provider_error": "Validation Failed: Failed to Validate"
+  "status": "RECOVERED",
+  "recovery_reason": "PROVIDER_QUOTE_EXPIRED",
+  "previous_quote_id": "expired-quote-uuid",
+  "search_id": "refreshed-search-uuid",
+  "quote": {
+    "id": "replacement-quote-uuid",
+    "status": "ACTIVE",
+    "version": 1,
+    "total_amount": "180000",
+    "expires_at": "2026-08-19T12:10:00Z"
+  },
+  "changes": {
+    "price_changed": true,
+    "deposit_changed": true,
+    "schedule_changed": true,
+    "itinerary_changed": false,
+    "ticket_rules_changed": false,
+    "requires_customer_acceptance": true
+  }
 }
 ```
 
-When this happens, the agent should ask the customer to pick another quote from
-the current search result or run a fresh search before booking.
+The expired quote becomes `SUPERSEDED`. Booking must use the replacement `quote.id` and `quote.version`. Concurrent recovery requests reuse the same replacement quote.
+
+If the exact itinerary is unavailable, the endpoint returns `ALTERNATIVES_REQUIRED` with a refreshed `search_id` and provider results under `alternatives`. If the itinerary exists but its saved repayment structure no longer fits, it returns `REPAYMENT_PLAN_REQUIRED` with the refreshed search and matched offer index. `KYC_REQUIRED` preserves the refreshed search while KYC is completed.
+
+Only an infrastructure or provider failure that prevents recovery returns HTTP `409` with `recovery_reason: RECOVERY_FAILED`. The agent should retry safely once and then escalate. It must not ask the customer to repeat the original trip details.
 
 ## Bookings and installments
 
@@ -561,7 +577,6 @@ GET /api/bookings/{booking_id}
 GET /api/bookings/{booking_id}/itinerary
 GET /api/bookings/{booking_id}/repayment
 GET /api/installments/{installment_id}
-POST /api/installments/{installment_id}
 ```
 
 The itinerary response contains `booking_id`, `release_level`, `segments`, and possibly `ticket_reference`. The repayment response is:
@@ -584,7 +599,9 @@ The itinerary response contains `booking_id`, `release_level`, `segments`, and p
 }
 ```
 
-Repayment and financing reads evaluate due dates before returning. Installments may transition to `OVERDUE`, `GRACE`, or `DEFAULTED`; a final default moves the booking to `CANCELLATION_REVIEW`. The reminder endpoint requires an `Idempotency-Key` header, updates the lifetime reminder metric once per logical reminder, and records an operational event.
+Repayment and financing reads evaluate due dates before returning. Installments may transition to `OVERDUE`, `GRACE`, or `DEFAULTED`; a final default moves the booking to `CANCELLATION_REVIEW`.
+
+Repayment reminders are backend-driven. Vercel calls `GET /api/cron/repayment-reminders` every day at 08:00 UTC, authenticated with `CRON_SECRET`. By default, the job emails customers 7, 3, and 1 day before each installment, on the due date, and 1, 2, 3, and 7 days after it becomes overdue. Configure these offsets with `REPAYMENT_REMINDER_DAYS_BEFORE` and `REPAYMENT_OVERDUE_REMINDER_DAYS`. Every scheduled reminder has a deterministic idempotency key, is counted only after Resend accepts it, and produces an operational event. This cron endpoint is internal and must not be exposed as an agent tool.
 
 ### Financing profile
 

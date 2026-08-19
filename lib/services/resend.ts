@@ -24,7 +24,12 @@
  *   // sent.id
  */
 
-import { Resend, type CreateEmailOptions, type ErrorResponse } from "resend";
+import {
+  Resend,
+  type CreateEmailOptions,
+  type CreateEmailRequestOptions,
+  type ErrorResponse,
+} from "resend";
 import {
   ServiceAuthError,
   ServiceNotFoundError,
@@ -137,6 +142,7 @@ export class ResendService {
    */
   async sendEmail(
     payload: Omit<CreateEmailOptions, "from"> & { from?: string },
+    options?: CreateEmailRequestOptions,
   ): Promise<{ id: string }> {
     const from = payload.from ?? process.env.RESEND_FROM_EMAIL;
     if (!from) {
@@ -148,7 +154,7 @@ export class ResendService {
       );
     }
     const finalPayload = { ...payload, from } as CreateEmailOptions;
-    return this.run((r) => r.emails.send(finalPayload));
+    return this.run((r) => r.emails.send(finalPayload, options));
   }
 
   async getEmail(id: string) {
