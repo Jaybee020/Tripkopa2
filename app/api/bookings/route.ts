@@ -3,6 +3,7 @@ import { z } from "zod";
 import { BookingCreateInput } from "@/lib/api-contracts";
 import { requireAgentCustomer } from "@/lib/auth/agent";
 import { bad, failure } from "@/lib/api-utils";
+import { toCustomerBooking, type CustomerBookingRow } from "@/lib/itinerary-delivery";
 
 type QuoteDetails = {
   offer?: unknown;
@@ -137,7 +138,7 @@ export async function POST(request: Request) {
       .eq("customer_id", customer.id);
     if (quoteUpdateError) throw quoteUpdateError;
 
-    return NextResponse.json(booking, { status: 201 });
+    return NextResponse.json(toCustomerBooking(booking as CustomerBookingRow), { status: 201 });
   } catch (error) {
     return error instanceof z.ZodError ? bad(error) : failure(error);
   }

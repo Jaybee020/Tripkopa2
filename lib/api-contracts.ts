@@ -313,7 +313,28 @@ export const Booking = z
   .passthrough();
 export type Booking = z.infer<typeof Booking>;
 export const Itinerary = z
-  .object({ booking_id: Id, release_level: z.string(), segments: Any })
+  .object({
+    booking_id: Id,
+    release_level: z.enum(["PARTIAL", "FULL"]),
+    segments: Any.optional(),
+    ticket_reference: z.string().nullable().optional(),
+    passenger_names: z.array(z.string()).optional(),
+    airline_name: z.string().nullable().optional(),
+    route: z.object({
+      origin: z.string().nullable(),
+      destination: z.string().nullable(),
+    }).optional(),
+    departure_date: z.string().nullable().optional(),
+    departure_time: z.string().nullable().optional(),
+    arrival_time: z.string().nullable().optional(),
+    ticket_class: z.string().nullable().optional(),
+    ticket_type: z.string().nullable().optional(),
+    repayment_status: z.string().optional(),
+    total_payable_amount: z.union([z.string(), z.number()]).optional(),
+    initial_deposit: z.union([z.string(), z.number()]).optional(),
+    outstanding_balance: z.union([z.string(), z.number()]).optional(),
+    currency: z.string().optional(),
+  })
   .passthrough();
 export type Itinerary = z.infer<typeof Itinerary>;
 export const RepaymentSchedule = z.object({

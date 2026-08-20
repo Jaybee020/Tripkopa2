@@ -3,6 +3,7 @@ import { requireAgentCustomer } from "@/lib/auth/agent";
 import { failure } from "@/lib/api-utils";
 import { loadFinancingRules } from "@/lib/financing-rules";
 import { evaluateRepaymentLifecycle, refreshCustomerTrustTier } from "@/lib/trust-financing";
+import { toCustomerBooking, type CustomerBookingRow } from "@/lib/itinerary-delivery";
 
 export async function GET(
   request: Request,
@@ -21,7 +22,7 @@ export async function GET(
       .eq("customer_id", customer.id)
       .single();
     if (error) throw error;
-    return NextResponse.json(data);
+    return NextResponse.json(toCustomerBooking(data as CustomerBookingRow));
   } catch (error) {
     return failure(error);
   }

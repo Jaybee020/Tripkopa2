@@ -190,10 +190,7 @@ async function applyToInstallments(booking: BookingRow, amount: number) {
 
 async function maybeReleaseFullItinerary(booking: BookingRow, amountPaid: number) {
   if (booking.booking_type !== "flexible") return;
-  const preTravelThreshold = roundMoney(
-    money(booking.total_amount) - money(booking.post_travel_amount),
-  );
-  if (amountPaid < preTravelThreshold) return;
+  if (amountPaid < money(booking.total_amount)) return;
   const { data: itinerary, error } = await supabase.admin
     .from("itineraries")
     .select("id,release_level,provider_ticket_reference")
@@ -215,7 +212,7 @@ async function maybeReleaseFullItinerary(booking: BookingRow, amountPaid: number
     customer_id: booking.customer_id,
     booking_id: booking.id,
     event_type: "itinerary.fully_released",
-    payload: { post_travel_balance: money(booking.post_travel_amount) },
+    payload: { outstanding_balance: 0 },
   });
 }
 

@@ -586,13 +586,7 @@ Partial itinerary must not include:
 
 ### Full Itinerary
 
-Full itinerary is released after repayment conditions are satisfied.
-
-Observer and Explorer:
-- full repayment required before release
-
-Voyager, Navigator, Ambassador:
-- may qualify for controlled early release or post-travel settlement, subject to review
+Full itinerary is released only after the backend confirms that the total payable amount has been fully repaid and the outstanding balance is zero. Post-travel repayment eligibility does not permit early itinerary release.
 
 Never release restricted itinerary details before eligibility is confirmed.
 
