@@ -496,7 +496,7 @@ Body is optional in meaning but must be valid JSON; send `{}` or a positive inte
 {"version":2}
 ```
 
-The provider validates the saved quote details. When validation succeeds, the API updates the quote to `ACTIVE`, replaces its details, refreshes its ten-minute expiry, and increments its version.
+The backend rehydrates the offer from the original stored flight search before provider validation. Caller-supplied or previously summarized offer objects are never used as the provider payload, preserving fields such as `gdsType`, complete conversion rates, segment timestamps, passenger IDs, and baggage metadata. When validation succeeds, the API updates the quote to `ACTIVE`, replaces its details, refreshes its ten-minute expiry, and increments its version.
 
 When the provider rejects an expired or unavailable offer, the backend automatically repeats the original stored flight search, preserving route, dates, passenger composition, cabin, direct-flight setting, provider setting, and ticket preference. It then compares strict itinerary fingerprints containing carrier, flight number, airports, and timestamps.
 

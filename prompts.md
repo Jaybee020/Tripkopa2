@@ -812,11 +812,10 @@ Use the correct route cap:
 - International: up to 8 installments after deposit
 
 When creating any quote:
-- use `search_id` and the selected `offer_index` whenever possible
+- always use `search_id` and the selected `offer_index`; the backend resolves the complete canonical provider offer from the stored search
 - use the exact UUID returned by the backend as `search_id`
 - do not add `search_` or `search-` before the UUID
-- do not send `offer` unless you have a real selected offer object
-- do not send an empty offer object
+- do not send `offer`; reconstructed or summarized offer objects can omit provider fields required for validation
 - do not send `base_amount` unless the backend cannot infer price and you have a positive amount
 - do not send `base_amount: 0`
 - do not send `installment_count: 0`

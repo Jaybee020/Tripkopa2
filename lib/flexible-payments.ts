@@ -529,46 +529,27 @@ export function listOffers(results: unknown): unknown[] {
   return [results];
 }
 
+export function getOfferId(value: unknown, depth = 0): string | null {
+  if (!isNonEmptyObject(value) || depth > 5) return null;
+  if (typeof value.id === "string" && value.id.trim()) return value.id.trim();
+  for (const key of ["offer", "flightOffer", "flight_offer", "details", "data"]) {
+    const found = getOfferId(value[key], depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
 export function selectOffer(
   results: unknown,
   offerIndex?: number,
   offer?: unknown,
 ) {
-  if (
-    offer &&
-    (typeof offer !== "object" ||
-      Array.isArray(offer) ||
-      Object.keys(offer as Record<string, unknown>).length > 0)
-  ) {
-    return offer;
+  const storedOffers = listOffers(results);
+  const requestedOfferId = getOfferId(offer);
+  if (requestedOfferId) {
+    return storedOffers.find((storedOffer) => (
+      getOfferId(storedOffer) === requestedOfferId
+    )) ?? null;
   }
-  const index = offerIndex ?? 0;
-  if (Array.isArray(results)) return results[index];
-  if (results && typeof results === "object") {
-    const object = results as Record<string, unknown>;
-    if (object.status === false) return null;
-    const collections = [
-      object.offers,
-      object.flightOffers,
-      object.flight_offers,
-      object.flights,
-      object.results,
-      object.details,
-      object.data,
-      object.items,
-      isNonEmptyObject(object.data) ? (object.data as Record<string, unknown>).offers : undefined,
-      isNonEmptyObject(object.data) ? (object.data as Record<string, unknown>).flightOffers : undefined,
-      isNonEmptyObject(object.details) ? (object.details as Record<string, unknown>).offers : undefined,
-      isNonEmptyObject(object.details) ? (object.details as Record<string, unknown>).flightOffers : undefined,
-    ];
-    for (const collection of collections) {
-      if (Array.isArray(collection)) return collection[index];
-    }
-    if (index === 0) {
-      if (isNonEmptyObject(object.details)) return object.details;
-      if (isNonEmptyObject(object.data)) return object.data;
-      if (isNonEmptyObject(object)) return object;
-    }
-  }
-  return null;
+  return storedOffers[offerIndex ?? 0] ?? null;
 }

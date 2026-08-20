@@ -3,7 +3,14 @@ import { z } from "zod";
 import { QuoteRevalidationInput } from "@/lib/api-contracts";
 import { requireAgentCustomer } from "@/lib/auth/agent";
 import { taketrips } from "@/lib/services/taketrips";
-import { extractOfferAmount, extractOfferCurrency, priceQuote, type RepaymentPlanRequest } from "@/lib/flexible-payments";
+import {
+  extractOfferAmount,
+  extractOfferCurrency,
+  getOfferId,
+  priceQuote,
+  selectOffer,
+  type RepaymentPlanRequest,
+} from "@/lib/flexible-payments";
 import { loadFinancingRules } from "@/lib/financing-rules";
 import { refreshCustomerTrustTier } from "@/lib/trust-financing";
 import { normalizeFareRules } from "@/lib/ticket-rules";
@@ -12,6 +19,8 @@ import { recoverProviderQuote } from "@/lib/quote-recovery";
 
 type QuoteDetails = {
   offer?: unknown;
+  selected_offer_id?: string | null;
+  selected_offer_index?: number;
   pricing?: {
     repayment_plan?: { request_snapshot?: RepaymentPlanRequest } | null;
   };
@@ -79,9 +88,31 @@ export async function POST(
     }
 
     const details = (quote.details ?? {}) as QuoteDetails;
+    const { data: storedSearch, error: storedSearchError } = await supabase
+      .from("flight_searches")
+      .select("results")
+      .eq("id", quote.search_id)
+      .eq("customer_id", customer.id)
+      .single();
+    if (storedSearchError) throw storedSearchError;
+    const savedOfferId = details.selected_offer_id ?? getOfferId(details.offer);
+    const canonicalOffer = selectOffer(
+      storedSearch.results,
+      details.selected_offer_index,
+      savedOfferId ? { id: savedOfferId } : details.offer,
+    );
+    if (!canonicalOffer) {
+      const recovered = await recoverProviderQuote({
+        supabase,
+        customerId: customer.id,
+        quote,
+        providerError: "The saved offer is not present in its original flight search",
+      });
+      return NextResponse.json(recovered);
+    }
     let provider: Record<string, unknown>;
     try {
-      provider = await taketrips.validate(details.offer ?? quote.details);
+      provider = await taketrips.validate(canonicalOffer);
     } catch (providerError) {
       const message = providerFailureMessage(providerError);
       try {

@@ -6,6 +6,8 @@ import { bad, failure } from "@/lib/api-utils";
 import {
   extractOfferAmount,
   extractOfferCurrency,
+  getOfferId,
+  listOffers,
   priceQuote,
   selectOffer,
 } from "@/lib/flexible-payments";
@@ -107,6 +109,10 @@ export async function POST(request: Request) {
     }
 
     const currency = extractOfferCurrency(offer, input.currency);
+    const selectedOfferId = getOfferId(offer);
+    const selectedOfferIndex = listOffers(search.results).findIndex(
+      (candidate) => getOfferId(candidate) === selectedOfferId,
+    );
     const rules = await loadFinancingRules(supabase);
     const trust = input.booking_type === "flexible"
       ? await refreshCustomerTrustTier(supabase, customer.id)
@@ -148,6 +154,10 @@ export async function POST(request: Request) {
         expires_at: expiresAt,
         details: {
           offer,
+          selected_offer_id: selectedOfferId,
+          selected_offer_index: selectedOfferIndex >= 0
+            ? selectedOfferIndex
+            : input.offer_index ?? 0,
           search: {
             origin: search.origin,
             destination: search.destination,
