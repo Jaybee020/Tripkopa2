@@ -8,9 +8,16 @@
 import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FinancingProfile, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingDetail, OperationsBookingList, OperationsRuleConfig, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuoteRevalidationInput, QuoteRevalidationResult, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
 
 export class ApiError extends Error {
+  public readonly code?: string;
+
   constructor(public status: number, message: string, public body?: unknown) {
-    super(message);
+    const code = body && typeof body === "object" && "code" in body &&
+        typeof (body as { code?: unknown }).code === "string"
+      ? (body as { code: string }).code
+      : undefined;
+    super(code ? `${code}: ${message}` : message);
     this.name = "ApiError";
+    this.code = code;
   }
 }
 

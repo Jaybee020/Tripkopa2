@@ -352,6 +352,15 @@ export const FinancingProfile = z.object({
   deposit_rates: Any.optional(),
   financing_caps: Any.optional(),
   post_travel_max_percentage: z.number().optional(),
+  schedule_constraints: z.object({
+    max_installments: z.record(z.string(), z.number().int().positive()),
+    max_financing_weeks: z.record(z.string(), z.number().positive()),
+    generated_due_days_before_departure: z.number().int().positive(),
+    repayment_due_days_before_departure: z.number().int().positive(),
+    grace_period_days: z.number().int().nonnegative(),
+    grace_hard_stop_days_before_departure: z.number().int().positive(),
+    post_travel_max_days: z.number().int().positive(),
+  }).optional(),
   rule_version: z.string().optional(),
 }).passthrough();
 export type FinancingProfile = z.infer<typeof FinancingProfile>;
