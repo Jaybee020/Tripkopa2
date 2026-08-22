@@ -13,14 +13,27 @@ export async function GET(
     const rules = await loadFinancingRules(supabase);
     await evaluateRepaymentLifecycle(supabase, customer.id, rules, booking_id);
     await refreshCustomerTrustTier(supabase, customer.id);
-    const { data, error } = await supabase
-      .from("installments")
-      .select("*")
-      .eq("booking_id", booking_id)
-      .eq("customer_id", customer.id)
-      .order("sequence_number");
-    if (error) throw error;
-    return NextResponse.json({ booking_id, installments: data });
+    const [installments, allocations] = await Promise.all([
+      supabase
+        .from("installments")
+        .select("*")
+        .eq("booking_id", booking_id)
+        .eq("customer_id", customer.id)
+        .order("sequence_number"),
+      supabase
+        .from("payment_allocations")
+        .select("id,payment_id,amount,currency,allocation_type,provider_paid_at,details,created_at")
+        .eq("booking_id", booking_id)
+        .eq("customer_id", customer.id)
+        .order("created_at", { ascending: false }),
+    ]);
+    if (installments.error) throw installments.error;
+    if (allocations.error) throw allocations.error;
+    return NextResponse.json({
+      booking_id,
+      installments: installments.data || [],
+      payment_allocations: allocations.data || [],
+    });
   } catch (e) {
     return failure(e);
   }

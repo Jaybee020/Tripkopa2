@@ -49,10 +49,15 @@ export async function POST(request: Request) {
       }
       throw error;
     }
-    const booking = paymentId
+    const allocation = paymentId
       ? await applyBookingPayment(String(paymentId))
       : { applied: false, reason: "no_payment_id" };
-    return NextResponse.json({ received: true, payment_id: paymentId, booking });
+    return NextResponse.json({
+      received: true,
+      payment_id: paymentId,
+      allocation,
+      booking: allocation,
+    });
   } catch (error) {
     return error instanceof z.ZodError ? bad(error) : failure(error);
   }

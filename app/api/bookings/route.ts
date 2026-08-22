@@ -4,6 +4,7 @@ import { BookingCreateInput } from "@/lib/api-contracts";
 import { requireAgentCustomer } from "@/lib/auth/agent";
 import { bad, failure } from "@/lib/api-utils";
 import { toCustomerBooking, type CustomerBookingRow } from "@/lib/itinerary-delivery";
+import { applyBookingPayment } from "@/lib/booking-payments";
 
 type QuoteDetails = {
   offer?: unknown;
@@ -138,7 +139,53 @@ export async function POST(request: Request) {
       .eq("customer_id", customer.id);
     if (quoteUpdateError) throw quoteUpdateError;
 
-    return NextResponse.json(toCustomerBooking(booking as CustomerBookingRow), { status: 201 });
+    let walletAllocation: Record<string, unknown> | null = null;
+    if (input.terms_accepted) {
+      const { data: wallet, error: walletError } = await supabase
+        .from("wallets")
+        .select("id,balance")
+        .eq("customer_id", customer.id)
+        .eq("currency", booking.currency)
+        .maybeSingle();
+      if (walletError) throw walletError;
+      const walletAmount = Math.min(
+        Number(wallet?.balance || 0),
+        Number(booking.balance_amount || 0),
+      );
+      if (walletAmount > 0) {
+        const { data: walletPayment, error: walletPaymentError } = await supabase
+          .from("payments")
+          .insert({
+            customer_id: customer.id,
+            booking_id: booking.id,
+            provider: "tripkopa_wallet",
+            provider_reference: `wallet-${booking.id}`,
+            payment_type: "wallet_application",
+            amount: walletAmount,
+            currency: booking.currency,
+            status: "SUCCEEDED",
+            idempotency_key: `${booking.id}:initial_wallet_allocation`,
+            metadata: { source: "existing_wallet_balance" },
+          })
+          .select("id")
+          .single();
+        if (walletPaymentError) throw walletPaymentError;
+        walletAllocation = await applyBookingPayment(walletPayment.id) as Record<string, unknown>;
+      }
+    }
+
+    const { data: currentBooking, error: currentBookingError } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("id", booking.id)
+      .eq("customer_id", customer.id)
+      .single();
+    if (currentBookingError) throw currentBookingError;
+
+    return NextResponse.json({
+      ...toCustomerBooking(currentBooking as CustomerBookingRow),
+      wallet_allocation: walletAllocation,
+    }, { status: 201 });
   } catch (error) {
     return error instanceof z.ZodError ? bad(error) : failure(error);
   }

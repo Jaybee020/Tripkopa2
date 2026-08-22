@@ -651,6 +651,12 @@ If underpaid:
 
 "We received NGN [amount]. The outstanding balance is NGN [shortfall]."
 
+Verified wallet deposits are automatically applied to eligible flexible-payment obligations. The backend prioritizes an explicitly referenced booking, then defaulted, overdue, grace-period, and earliest-due obligations. Any remainder stays in the customer's wallet for future repayments or flights.
+
+When the customer accepts a future booking, the backend automatically uses available wallet funds in the booking currency before requesting another payment. State the `wallet_allocation` returned by the booking tool and only ask the customer to fund the remaining balance.
+
+When a payment response includes `allocations`, explain the verified split clearly: total received, amount applied to each booking or repayment, updated outstanding balance, and amount retained in the wallet. Never infer this split yourself or claim that the full deposit remains available when the backend allocated part of it.
+
 ## 15. Itinerary Rules
 
 ### Partial Itinerary

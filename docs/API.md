@@ -568,6 +568,8 @@ When terms are accepted:
 | `full` | `AWAITING_PAYMENT` | Consumes the quote |
 | `flexible` | `AWAITING_DEPOSIT` | Consumes the quote and creates installment rows from the quote repayment plan |
 
+After an accepted booking is created, available same-currency wallet funds are automatically applied to it, up to the booking balance. The booking response includes `wallet_allocation` when funds were used. If the wallet does not cover the booking, the remaining balance continues through the normal payment-instructions flow.
+
 When terms are not accepted, the initial status is `AWAITING_TERMS`. A flexible booking requires a flexible quote containing `details.pricing.repayment_plan`. Returns `201`.
 
 ### Read booking data
@@ -584,6 +586,7 @@ The itinerary response contains `booking_id`, `release_level`, `segments`, and p
 ```json
 {
   "booking_id": "booking-uuid",
+  "payment_allocations": [],
   "installments": [
     {
       "id": "installment-uuid",
@@ -919,7 +922,11 @@ Required payload:
 
 `user` is optional. The callback is processed atomically and deduplicated using `session_id`. It records the provider event, marks or creates a succeeded payment, inserts wallet deposit ledger entries, and credits the customer wallet.
 
-If the matched payment has a `booking_id`, the webhook also applies the payment to that booking:
+Every verified deposit is then passed through the automatic allocation waterfall. An explicitly referenced booking is paid first. Otherwise, eligible flexible-payment balances are prioritized as `DEFAULTED`, `OVERDUE`, `GRACE`, earliest due date, then oldest booking. One deposit may cover multiple bookings. Any amount left after all eligible balances are covered remains in the customer's wallet for later repayments or flights.
+
+Each booking allocation is recorded in `payment_allocations` with its payment, booking, amount, provider payment timestamp, allocation type, and installment breakdown. Allocation and all wallet, booking, installment, and ledger updates occur in one database transaction.
+
+When money is allocated to a booking, the webhook:
 
 - debits the wallet into booking receivables;
 - updates `bookings.amount_paid`, `bookings.balance_amount`, and booking status;
@@ -934,14 +941,26 @@ Success returns:
 {
   "received": true,
   "payment_id": "payment-uuid",
-  "booking": {
+  "allocation": {
     "applied": true,
-    "booking_id": "booking-uuid",
-    "status": "PAYMENT_RECEIVED",
-    "ticketing": {"ticketed": true, "release_level": "LIMITED"}
+    "deposit_amount": 100000,
+    "allocated_amount": 65000,
+    "unallocated_amount": 35000,
+    "wallet_balance": 35000,
+    "allocations": [
+      {
+        "booking_id": "booking-uuid",
+        "amount": 65000,
+        "allocation_type": "AUTOMATIC_LOAN",
+        "outstanding_balance": 0
+      }
+    ],
+    "ticketing": []
   }
 }
 ```
+
+The legacy `booking` response property mirrors `allocation` for compatibility. `GET /api/payments/{payment_id}` includes the persisted `allocations` array.
 
 For development/provider testing, set `TAKETRIPS_MOCK_ORDER_SUCCESS=true` to skip the real TakeTrips order call and create a mock ticket reference. An unknown virtual account returns `422`.
 

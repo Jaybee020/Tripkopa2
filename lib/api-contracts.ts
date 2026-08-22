@@ -309,6 +309,7 @@ export const Booking = z
     status: z.string(),
     total_amount: z.union([z.string(), z.number()]),
     currency: z.string(),
+    wallet_allocation: Any.nullable().optional(),
   })
   .passthrough();
 export type Booking = z.infer<typeof Booking>;
@@ -340,6 +341,7 @@ export type Itinerary = z.infer<typeof Itinerary>;
 export const RepaymentSchedule = z.object({
   booking_id: Id,
   installments: z.array(Any),
+  payment_allocations: z.array(Any).optional(),
 });
 export type RepaymentSchedule = z.infer<typeof RepaymentSchedule>;
 export const FinancingProfile = z.object({
@@ -400,6 +402,7 @@ export const Payment = z
     status: z.string(),
     amount: z.union([z.string(), z.number()]),
     currency: z.string(),
+    allocations: z.array(Any).optional(),
   })
   .passthrough();
 export type Payment = z.infer<typeof Payment>;
@@ -460,6 +463,7 @@ export const OperationsBookingDetail = z.object({
   booking: Any,
   customer: Any.nullable(),
   payments: z.array(Any),
+  payment_allocations: z.array(Any).optional(),
   installments: z.array(Any),
   ledger_entries: z.array(Any),
   itinerary: Any.nullable().optional(),

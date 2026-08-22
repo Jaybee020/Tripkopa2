@@ -34,6 +34,7 @@ export async function GET(
 
     const [
       payments,
+      allocations,
       installments,
       ledger,
       itinerary,
@@ -44,6 +45,11 @@ export async function GET(
     ] = await Promise.all([
       serviceSupabase.admin
         .from("payments")
+        .select("*")
+        .eq("booking_id", booking_id)
+        .order("created_at", { ascending: false }),
+      serviceSupabase.admin
+        .from("payment_allocations")
         .select("*")
         .eq("booking_id", booking_id)
         .order("created_at", { ascending: false }),
@@ -90,7 +96,7 @@ export async function GET(
         .limit(20),
     ]);
 
-    for (const result of [payments, installments, ledger, itinerary, customer, audit, riskEvents, tierHistory]) {
+    for (const result of [payments, allocations, installments, ledger, itinerary, customer, audit, riskEvents, tierHistory]) {
       if (result.error) throw result.error;
     }
 
@@ -98,6 +104,7 @@ export async function GET(
       booking: currentBooking,
       customer: customer.data,
       payments: payments.data || [],
+      payment_allocations: allocations.data || [],
       installments: installments.data || [],
       ledger_entries: ledger.data || [],
       itinerary: itinerary.data,

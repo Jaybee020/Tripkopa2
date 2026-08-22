@@ -29,19 +29,8 @@ type BookingRow = {
   post_travel_amount?: number | string | null;
 };
 
-type InstallmentRow = {
-  id: string;
-  amount: number | string;
-  paid_amount: number | string;
-  status: string;
-};
-
 function money(value: number | string | null | undefined) {
   return Math.round(Number(value || 0) * 100) / 100;
-}
-
-function roundMoney(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 async function orderFlight(booking: BookingRow, paymentReference: string | null) {
@@ -83,6 +72,16 @@ async function orderFlight(booking: BookingRow, paymentReference: string | null)
 
 async function maybeTicketBooking(booking: BookingRow, payment: PaymentRow) {
   if (booking.provider_reference) return { ticketed: false, skipped: "already_ticketed" };
+  if ([
+    "MANUAL_REVIEW",
+    "CANCELLATION_REVIEW",
+    "CANCELLATION_PENDING",
+    "CANCELLED",
+    "REFUNDED",
+    "FAILED",
+  ].includes(booking.status)) {
+    return { ticketed: false, skipped: "booking_status_blocks_ticketing" };
+  }
 
   const shouldTicket =
     booking.booking_type === "flexible"
@@ -156,38 +155,6 @@ async function maybeTicketBooking(booking: BookingRow, payment: PaymentRow) {
   }
 }
 
-async function applyToInstallments(booking: BookingRow, amount: number) {
-  let remaining = amount;
-  const { data: installments, error } = await supabase.admin
-    .from("installments")
-    .select("*")
-    .eq("booking_id", booking.id)
-    .eq("customer_id", booking.customer_id)
-    .order("sequence_number", { ascending: true });
-  if (error) throw error;
-
-  for (const installment of (installments || []) as InstallmentRow[]) {
-    if (remaining <= 0) break;
-    const due = roundMoney(money(installment.amount) - money(installment.paid_amount));
-    if (due <= 0) continue;
-    const applied = Math.min(remaining, due);
-    const paidAmount = roundMoney(money(installment.paid_amount) + applied);
-    remaining = roundMoney(remaining - applied);
-    const status = paidAmount >= money(installment.amount) ? "PAID" : "PARTIALLY_PAID";
-    const { error: updateError } = await supabase.admin
-      .from("installments")
-      .update({
-        paid_amount: paidAmount,
-        status,
-        ...(status === "PAID" && installment.status !== "PAID"
-          ? { paid_at: new Date().toISOString() }
-          : {}),
-      })
-      .eq("id", installment.id);
-    if (updateError) throw updateError;
-  }
-}
-
 async function maybeReleaseFullItinerary(booking: BookingRow, amountPaid: number) {
   if (booking.booking_type !== "flexible") return;
   if (amountPaid < money(booking.total_amount)) return;
@@ -225,144 +192,47 @@ export async function applyBookingPayment(paymentId: string) {
   if (paymentError) throw paymentError;
 
   const typedPayment = payment as PaymentRow;
-  if (!typedPayment.booking_id || typedPayment.status !== "SUCCEEDED") {
-    return { applied: false, reason: "not_booking_payment" };
-  }
-  if (typedPayment.metadata?.booking_allocation_applied === true) {
-    return { applied: false, reason: "already_applied" };
+  if (typedPayment.status !== "SUCCEEDED") {
+    return { applied: false, reason: "payment_not_succeeded" };
   }
 
-  const { data: booking, error: bookingError } = await supabase.admin
-    .from("bookings")
-    .select("*")
-    .eq("id", typedPayment.booking_id)
-    .eq("customer_id", typedPayment.customer_id)
-    .single();
-  if (bookingError) throw bookingError;
-  const typedBooking = booking as BookingRow;
-
-  const amount = money(typedPayment.amount);
-  const { data: wallet, error: walletError } = await supabase.admin
-    .from("wallets")
-    .select("*")
-    .eq("customer_id", typedPayment.customer_id)
-    .eq("currency", typedPayment.currency)
-    .single();
-  if (walletError) throw walletError;
-
-  const walletBalance = money(wallet.balance);
-  if (walletBalance < amount) {
-    throw Object.assign(new Error("Wallet balance is insufficient for booking allocation"), {
-      status: 409,
-    });
-  }
-
-  const nextAmountPaid = roundMoney(money(typedBooking.amount_paid) + amount);
-  const nextBalance = Math.max(
-    0,
-    roundMoney(money(typedBooking.total_amount) - nextAmountPaid),
+  const { data: allocationData, error: allocationError } = await supabase.admin.rpc(
+    "allocate_wallet_payment",
+    { p_payment_id: typedPayment.id },
   );
-  const depositSatisfied =
-    typedBooking.booking_type === "flexible" &&
-    nextAmountPaid >= money(typedBooking.deposit_amount);
-  const fullSatisfied = nextBalance === 0;
-  const nextStatus = fullSatisfied
-    ? "PAID"
-    : depositSatisfied
-      ? "PAYMENT_RECEIVED"
-      : "PARTIALLY_PAID";
+  if (allocationError) throw allocationError;
 
-  const { error: walletDebitError } = await supabase.admin
-    .from("wallets")
-    .update({ balance: roundMoney(walletBalance - amount) })
-    .eq("id", wallet.id);
-  if (walletDebitError) throw walletDebitError;
+  const summary = allocationData && typeof allocationData === "object"
+    ? allocationData as Record<string, unknown>
+    : { applied: false, reason: "invalid_allocation_result" };
+  const allocations = Array.isArray(summary.allocations)
+    ? summary.allocations.filter(
+      (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object",
+    )
+    : [];
+  const bookingIds = [...new Set(allocations
+    .map((item) => typeof item.booking_id === "string" ? item.booking_id : null)
+    .filter((id): id is string => Boolean(id)))];
+  const ticketing: Array<Record<string, unknown>> = [];
 
-  const { error: ledgerError } = await supabase.admin.from("ledger_entries").insert([
-    {
-      customer_id: typedPayment.customer_id,
-      wallet_id: wallet.id,
-      payment_id: typedPayment.id,
-      booking_id: typedBooking.id,
-      entry_type: "BOOKING_PAYMENT",
-      amount,
-      currency: typedPayment.currency,
-      status: "POSTED",
-      description: "Wallet applied to booking",
-      account_code: "CUSTOMER_AVAILABLE",
-      direction: "DEBIT",
-      provider_reference: typedPayment.provider_reference,
-      idempotency_key: `${typedPayment.id}:booking_allocation`,
-    },
-    {
-      customer_id: typedPayment.customer_id,
-      wallet_id: wallet.id,
-      payment_id: typedPayment.id,
-      booking_id: typedBooking.id,
-      entry_type: "BOOKING_PAYMENT",
-      amount,
-      currency: typedPayment.currency,
-      status: "POSTED",
-      description: "Booking receivable settled",
-      account_code: "BOOKING_RECEIVABLE",
-      direction: "CREDIT",
-      provider_reference: typedPayment.provider_reference,
-      idempotency_key: `${typedPayment.id}:booking_allocation`,
-    },
-  ]);
-  if (ledgerError) throw ledgerError;
-
-  if (typedBooking.booking_type === "flexible" && depositSatisfied) {
-    const previousInstallmentAllocation = Math.max(
-      0,
-      roundMoney(money(typedBooking.amount_paid) - money(typedBooking.deposit_amount)),
-    );
-    const nextInstallmentAllocation = Math.max(
-      0,
-      roundMoney(nextAmountPaid - money(typedBooking.deposit_amount)),
-    );
-    const installmentAllocation = roundMoney(
-      nextInstallmentAllocation - previousInstallmentAllocation,
-    );
-    if (installmentAllocation > 0) {
-      await applyToInstallments(typedBooking, installmentAllocation);
-    }
+  for (const bookingId of bookingIds) {
+    const { data: booking, error: bookingError } = await supabase.admin
+      .from("bookings")
+      .select("*")
+      .eq("id", bookingId)
+      .eq("customer_id", typedPayment.customer_id)
+      .single();
+    if (bookingError) throw bookingError;
+    const typedBooking = booking as BookingRow;
+    const result = await maybeTicketBooking(typedBooking, typedPayment);
+    ticketing.push({ booking_id: bookingId, ...result });
+    await maybeReleaseFullItinerary(typedBooking, money(typedBooking.amount_paid));
   }
 
-  const { data: updatedBooking, error: updateBookingError } = await supabase.admin
-    .from("bookings")
-    .update({
-      amount_paid: nextAmountPaid,
-      balance_amount: nextBalance,
-      status: nextStatus,
-    })
-    .eq("id", typedBooking.id)
-    .select("*")
-    .single();
-  if (updateBookingError) throw updateBookingError;
-
-  const nextMetadata = {
-    ...(typedPayment.metadata || {}),
-    booking_allocation_applied: true,
-    booking_allocation_applied_at: new Date().toISOString(),
-  };
-  const { error: paymentUpdateError } = await supabase.admin
-    .from("payments")
-    .update({ metadata: nextMetadata })
-    .eq("id", typedPayment.id);
-  if (paymentUpdateError) throw paymentUpdateError;
-
-  const ticketing = await maybeTicketBooking(
-    updatedBooking as BookingRow,
-    typedPayment,
-  );
-  await maybeReleaseFullItinerary(updatedBooking as BookingRow, nextAmountPaid);
   await refreshCustomerTrustTier(supabase.admin, typedPayment.customer_id);
 
   return {
-    applied: true,
-    booking_id: typedBooking.id,
-    status: (updatedBooking as BookingRow).status,
+    ...summary,
     ticketing,
   };
 }

@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, isoDate } from "./flexible-payments";
-import { isTrustTier, type FinancingRules, type TrustTier } from "./financing-rules";
+import {
+  isTrustTier,
+  type FinancingRules,
+  type TrustTier,
+} from "./financing-rules";
 
 type BookingRow = {
   id: string;
@@ -32,16 +36,29 @@ type RiskEvent = {
   status: string;
 };
 
-const TIER_ORDER: TrustTier[] = ["OBSERVER", "EXPLORER", "VOYAGER", "NAVIGATOR", "AMBASSADOR"];
+const TIER_ORDER: TrustTier[] = [
+  "OBSERVER",
+  "EXPLORER",
+  "VOYAGER",
+  "NAVIGATOR",
+  "AMBASSADOR",
+];
 
 function lowerTier(tier: TrustTier) {
   return TIER_ORDER[Math.max(0, TIER_ORDER.indexOf(tier) - 1)];
 }
 
-function computeTier(cycles: number, onTimeRate: number, reminderRate: number): TrustTier {
-  if (cycles >= 21 && onTimeRate >= 0.95 && reminderRate <= 0.2) return "AMBASSADOR";
-  if (cycles >= 16 && onTimeRate >= 0.95 && reminderRate <= 0.2) return "NAVIGATOR";
-  if (cycles >= 11 && onTimeRate >= 0.9 && reminderRate <= 0.2) return "VOYAGER";
+function computeTier(
+  cycles: number,
+  onTimeRate: number,
+  reminderRate: number,
+): TrustTier {
+  if (cycles >= 21 && onTimeRate >= 0.95 && reminderRate <= 0.2)
+    return "AMBASSADOR";
+  if (cycles >= 16 && onTimeRate >= 0.95 && reminderRate <= 0.2)
+    return "NAVIGATOR";
+  if (cycles >= 11 && onTimeRate >= 0.9 && reminderRate <= 0.2)
+    return "VOYAGER";
   if (cycles >= 5) return "EXPLORER";
   return "OBSERVER";
 }
@@ -72,13 +89,15 @@ async function ensureRiskEvent(
     .maybeSingle();
   if (error) throw error;
   if (!data) {
-    const { error: insertError } = await supabase.from("customer_risk_events").insert({
-      customer_id: customerId,
-      booking_id: bookingId,
-      event_type: eventType,
-      severity,
-      details,
-    });
+    const { error: insertError } = await supabase
+      .from("customer_risk_events")
+      .insert({
+        customer_id: customerId,
+        booking_id: bookingId,
+        event_type: eventType,
+        severity,
+        details,
+      });
     if (insertError) throw insertError;
   }
 }
@@ -91,7 +110,9 @@ export async function evaluateRepaymentLifecycle(
 ) {
   let bookingQuery = supabase
     .from("bookings")
-    .select("id,status,travel_completion_date,repayment_deadline,grace_deadline")
+    .select(
+      "id,status,travel_completion_date,repayment_deadline,grace_deadline",
+    )
     .eq("customer_id", customerId)
     .eq("booking_type", "flexible");
   if (bookingId) bookingQuery = bookingQuery.eq("id", bookingId);
@@ -117,21 +138,42 @@ export async function evaluateRepaymentLifecycle(
     for (const row of rows) {
       if (paidInFull(row) || row.due_date >= today) continue;
       const isFinalPre = row.id === finalPre?.id;
-      const hardGrace = booking.grace_deadline ||
+      const hardGrace =
+        booking.grace_deadline ||
         (booking.repayment_deadline
-          ? isoDate(addDays(new Date(`${booking.repayment_deadline}T00:00:00Z`), rules.grace_period_days))
+          ? isoDate(
+              addDays(
+                new Date(`${booking.repayment_deadline}T00:00:00Z`),
+                rules.grace_period_days,
+              ),
+            )
           : row.due_date);
-      const status = isFinalPre && today <= hardGrace ? "GRACE" : isFinalPre || row.phase === "POST_TRAVEL" ? "DEFAULTED" : "OVERDUE";
+      const status =
+        isFinalPre && today <= hardGrace
+          ? "GRACE"
+          : isFinalPre || row.phase === "POST_TRAVEL"
+            ? "DEFAULTED"
+            : "OVERDUE";
       if (row.status !== status) {
-        const { error } = await supabase.from("installments").update({ status }).eq("id", row.id);
+        const { error } = await supabase
+          .from("installments")
+          .update({ status })
+          .eq("id", row.id);
         if (error) throw error;
       }
       if (status === "DEFAULTED") {
-        await ensureRiskEvent(supabase, customerId, booking.id, "FINAL_DEFAULT", "MAJOR", {
-          installment_id: row.id,
-          due_date: row.due_date,
-          phase: row.phase || "PRE_TRAVEL",
-        });
+        await ensureRiskEvent(
+          supabase,
+          customerId,
+          booking.id,
+          "FINAL_DEFAULT",
+          "MAJOR",
+          {
+            installment_id: row.id,
+            due_date: row.due_date,
+            phase: row.phase || "PRE_TRAVEL",
+          },
+        );
         if (booking.status !== "CANCELLATION_REVIEW") {
           const { error } = await supabase
             .from("bookings")
@@ -154,11 +196,27 @@ export async function refreshCustomerTrustTier(
   on_time_repayment_rate: number;
   reminder_dependency_rate: number;
 }> {
-  const [{ data: customer, error: customerError }, { data: bookings, error: bookingError }, { data: installments, error: installmentError }, { data: riskEvents, error: riskError }] = await Promise.all([
-    supabase.from("customers").select("trust_tier,trust_tier_override").eq("id", customerId).single(),
-    supabase.from("bookings").select("id,status,travel_completion_date,balance_amount").eq("customer_id", customerId).eq("booking_type", "flexible"),
+  const [
+    { data: customer, error: customerError },
+    { data: bookings, error: bookingError },
+    { data: installments, error: installmentError },
+    { data: riskEvents, error: riskError },
+  ] = await Promise.all([
+    supabase
+      .from("customers")
+      .select("trust_tier,trust_tier_override")
+      .eq("id", customerId)
+      .single(),
+    supabase
+      .from("bookings")
+      .select("id,status,travel_completion_date,balance_amount")
+      .eq("customer_id", customerId)
+      .eq("booking_type", "flexible"),
     supabase.from("installments").select("*").eq("customer_id", customerId),
-    supabase.from("customer_risk_events").select("id,booking_id,event_type,severity,status").eq("customer_id", customerId),
+    supabase
+      .from("customer_risk_events")
+      .select("id,booking_id,event_type,severity,status")
+      .eq("customer_id", customerId),
   ]);
   if (customerError) throw customerError;
   if (bookingError) throw bookingError;
@@ -169,20 +227,38 @@ export async function refreshCustomerTrustTier(
   const installmentRows = (installments || []) as InstallmentRow[];
   const risks = (riskEvents || []) as RiskEvent[];
   const today = isoDate(new Date());
-  const blockedBookings = new Set(risks.filter((event) => event.severity === "SEVERE" || event.event_type === "FINAL_DEFAULT").map((event) => event.booking_id));
-  const successfulCycles = bookingRows.filter((booking) =>
-    Number(booking.balance_amount || 0) === 0 &&
-    Boolean(booking.travel_completion_date && booking.travel_completion_date <= today) &&
-    !blockedBookings.has(booking.id),
+  const blockedBookings = new Set(
+    risks
+      .filter(
+        (event) =>
+          event.severity === "SEVERE" || event.event_type === "FINAL_DEFAULT",
+      )
+      .map((event) => event.booking_id),
+  );
+  const successfulCycles = bookingRows.filter(
+    (booking) =>
+      Number(booking.balance_amount || 0) === 0 &&
+      Boolean(
+        booking.travel_completion_date &&
+        booking.travel_completion_date <= today,
+      ) &&
+      !blockedBookings.has(booking.id),
   ).length;
   const completed = installmentRows.filter(paidInFull);
-  const onTimeRate = completed.length ? completed.filter(onTime).length / completed.length : 1;
+  const onTimeRate = completed.length
+    ? completed.filter(onTime).length / completed.length
+    : 1;
   const reminderRate = completed.length
-    ? completed.filter((item) => Number(item.reminder_count || 0) > 0).length / completed.length
+    ? completed.filter((item) => Number(item.reminder_count || 0) > 0).length /
+      completed.length
     : 0;
   let computedTier = computeTier(successfulCycles, onTimeRate, reminderRate);
   const openRisks = risks.filter((event) => event.status === "OPEN");
-  if (openRisks.some((event) => event.severity === "SEVERE" || event.event_type === "FRAUD")) {
+  if (
+    openRisks.some(
+      (event) => event.severity === "SEVERE" || event.event_type === "FRAUD",
+    )
+  ) {
     computedTier = "OBSERVER";
   } else if (openRisks.some((event) => event.event_type === "FINAL_DEFAULT")) {
     computedTier = lowerTier(computedTier);
@@ -200,21 +276,30 @@ export async function refreshCustomerTrustTier(
     on_time_repayment_rate: onTimeRate,
     reminder_dependency_rate: reminderRate,
   };
-  const { error: updateError } = await supabase.from("customers").update({
-    trust_tier: computedTier,
-    ...metrics,
-  }).eq("id", customerId);
+  const { error: updateError } = await supabase
+    .from("customers")
+    .update({
+      trust_tier: computedTier,
+      ...metrics,
+    })
+    .eq("id", customerId);
   if (updateError) throw updateError;
   if (previousTier !== effectiveTier) {
-    const { error: historyError } = await supabase.from("trust_tier_history").insert({
-      customer_id: customerId,
-      previous_tier: previousTier,
-      computed_tier: computedTier,
-      effective_tier: effectiveTier,
-      reason: openRisks.length ? "risk_adjustment" : "behavioral_history",
-      metrics,
-    });
+    const { error: historyError } = await supabase
+      .from("trust_tier_history")
+      .insert({
+        customer_id: customerId,
+        previous_tier: previousTier,
+        computed_tier: computedTier,
+        effective_tier: effectiveTier,
+        reason: openRisks.length ? "risk_adjustment" : "behavioral_history",
+        metrics,
+      });
     if (historyError) throw historyError;
   }
-  return { computed_tier: computedTier, effective_tier: effectiveTier, ...metrics };
+  return {
+    computed_tier: computedTier,
+    effective_tier: effectiveTier,
+    ...metrics,
+  };
 }
