@@ -38,7 +38,7 @@ export type RepaymentPlanRequest =
   | {
       mode: "custom";
       installments: Array<{
-        amount: number;
+        amount?: number;
         due_date: string;
         phase?: RepaymentPhase;
       }>;
@@ -292,24 +292,40 @@ export function priceQuote(input: QuotePricingInput): QuotePricing {
     if (sorted.some((item, index) => item !== request.installments[index])) {
       throw Object.assign(new Error("Custom installment dates must be in ascending order"), { status: 422 });
     }
-    const totalScheduled = roundMoney(request.installments.reduce((sum, item) => sum + item.amount, 0));
-    if (totalScheduled !== remaining) {
-      if (!input.rescaleCustomPlan) {
-        throw Object.assign(new Error("Custom installment amounts must equal the post-deposit balance"), {
-          status: 422,
-          code: "SCHEDULE_TOTAL_MISMATCH",
-          required_amount: remaining,
-          scheduled_amount: totalScheduled,
-        });
-      }
+    const providedAmounts = request.installments.filter((item) => item.amount !== undefined);
+    if (providedAmounts.length > 0 && providedAmounts.length !== request.installments.length) {
+      throw Object.assign(
+        new Error("Provide an amount for every custom installment or omit all amounts for an equal split"),
+        { status: 400, code: "CUSTOM_AMOUNT_MODE_INVALID" },
+      );
     }
-    const customAmounts = totalScheduled === remaining
-      ? request.installments.map((item) => item.amount)
-      : splitProportionally(remaining, request.installments.map((item) => item.amount));
+    const hasExactAmounts = providedAmounts.length === request.installments.length;
+    const exactAmounts = hasExactAmounts
+      ? request.installments.map((item) => item.amount as number)
+      : null;
+    if (exactAmounts?.some((amount) => !Number.isFinite(amount) || amount <= 0)) {
+      throw Object.assign(new Error("Each custom installment amount must be positive"), { status: 422 });
+    }
+    const totalScheduled = exactAmounts
+      ? roundMoney(exactAmounts.reduce((sum, amount) => sum + amount, 0))
+      : remaining;
+    if (exactAmounts && totalScheduled !== remaining && !input.rescaleCustomPlan) {
+      throw Object.assign(new Error("Custom installment amounts must equal the post-deposit balance"), {
+        status: 422,
+        code: "SCHEDULE_TOTAL_MISMATCH",
+        required_amount: remaining,
+        scheduled_amount: totalScheduled,
+      });
+    }
+    const customAmounts = !exactAmounts
+      ? splitEvenly(remaining, request.installments.length)
+      : totalScheduled === remaining
+        ? exactAmounts
+        : splitProportionally(remaining, exactAmounts);
     let previous = "";
     installments = request.installments.map((item, index) => {
-      if (!Number.isFinite(item.amount) || item.amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(item.due_date)) {
-        throw Object.assign(new Error("Each custom installment needs a positive amount and ISO due date"), { status: 422 });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(item.due_date)) {
+        throw Object.assign(new Error("Each custom installment needs an ISO due date"), { status: 422 });
       }
       if (item.due_date <= isoDate(today) || item.due_date === previous) {
         throw Object.assign(new Error("Custom installment dates must be unique future dates"), { status: 422 });

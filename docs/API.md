@@ -436,7 +436,7 @@ Fields:
 | `base_amount` | Sometimes | Positive number; required when the backend cannot infer price from the offer |
 | `currency` | No | Three-letter code, default `NGN` |
 | `installment_count` | No | Positive integer up to `8`; capped by MVP route rules |
-| `repayment_plan_request` | No | Generated weekly/monthly plan, or custom amount/date rows; replaces legacy `installment_count` |
+| `repayment_plan_request` | No | Generated weekly/monthly plan, custom fixed amount/date rows, or custom date rows with amounts omitted for an equal split of the final post-deposit balance; replaces legacy `installment_count` |
 
 Do not send placeholder values for unknown optional fields. Omit `offer` instead of sending `{}`, omit `base_amount` instead of sending `0`, and omit `installment_count` instead of sending `0`. The backend treats those placeholder values as omitted, then attempts to use the selected stored offer.
 

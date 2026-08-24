@@ -203,6 +203,23 @@ The combined pre-travel and post-travel installment count must remain within the
 
 ### 6.4 Customer-proposed custom plan
 
+For an equal split across customer-selected dates, omit `amount` from every row. The backend calculates the flexible-payment grand total and tier deposit first, then splits the post-deposit balance exactly:
+
+```json
+{
+  "search_id": "6ad4adba-6b06-498a-b1c2-8b82e376494f",
+  "booking_type": "flexible",
+  "offer_index": 0,
+  "repayment_plan_request": {
+    "mode": "custom",
+    "installments": [
+      { "due_date": "2026-10-01", "phase": "PRE_TRAVEL" },
+      { "due_date": "2026-11-01", "phase": "PRE_TRAVEL" }
+    ]
+  }
+}
+```
+
 The customer may propose exact amounts and dates:
 
 ```json
@@ -238,6 +255,12 @@ The backend validates:
 - completion at least 10 days before departure;
 - trust-tier post-travel eligibility;
 - the 90-day post-travel deadline.
+
+Custom installment amounts are repayments after the initial deposit. Their sum must therefore equal the backend-priced `total_amount - deposit_amount`, after flexible-payment charges and tier rules have been applied. Do not split the flight-search fare or the final `total_amount` itself.
+
+Custom rows must either all include `amount` (fixed-amount mode) or all omit it (equal-split mode). Mixed rows are invalid.
+
+Because the flight-search fare is not an authoritative flexible-payment quote, the quote API may return `SCHEDULE_TOTAL_MISMATCH` with `required_amount` and `scheduled_amount`. Treat `required_amount` as the exact post-deposit balance. If the customer requested an equal or proportional split, preserve the accepted dates and phases, resplit `required_amount` to exact cents, and retry once. If the customer explicitly chose fixed amounts, obtain their approval before changing those amounts.
 
 If rejected, use the returned `required_amount`, `scheduled_amount`, `maximum_installments`, or `maximum_percentage` to help the customer revise the plan. Do not approve the plan through conversational arithmetic.
 

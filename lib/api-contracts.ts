@@ -198,7 +198,7 @@ const PositiveOptionalInt = z.preprocess(
   z.number().int().positive().max(8).optional(),
 );
 const RepaymentInstallmentInput = z.object({
-  amount: z.number().positive(),
+  amount: z.number().positive().optional(),
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   phase: z.enum(["PRE_TRAVEL", "POST_TRAVEL"]).optional(),
 });

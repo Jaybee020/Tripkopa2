@@ -314,7 +314,7 @@ For generated repayment dates:
 }
 ```
 
-Use `monthly` for calendar-month repayments. For a negotiated plan, send `mode: custom` and an ordered `installments` array containing positive `amount`, ISO `due_date`, and optional `phase` (`PRE_TRAVEL` or `POST_TRAVEL`). The backend validates route caps, exact totals, tier eligibility, 10/14-day deadlines, and the 90-day post-travel limit.
+Use `monthly` for calendar-month repayments. For a negotiated plan, send `mode: custom` and an ordered `installments` array containing ISO `due_date` and optional `phase` (`PRE_TRAVEL` or `POST_TRAVEL`). Include a positive `amount` on every row for fixed amounts, or omit it from every row for a backend-calculated equal split of the final post-deposit balance. The backend validates route caps, exact totals, tier eligibility, 10/14-day deadlines, and the 90-day post-travel limit.
 
 ### Get Quote
 

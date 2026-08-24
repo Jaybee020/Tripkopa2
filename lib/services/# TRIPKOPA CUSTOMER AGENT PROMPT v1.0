@@ -441,11 +441,18 @@ Use `monthly` for calendar-month repayments. If the financing profile confirms p
 ```
 
 For a custom plan:
-- collect every repayment amount and due date
+- collect every repayment due date
+- if the customer specifies exact amounts, collect and send an amount for every row
+- if the customer asks to split the balance equally across chosen dates, omit `amount` from every row; the backend will apply all flexible-payment charges and the current tier-based deposit, then calculate the exact equal split from the final post-deposit balance
 - send `repayment_plan_request.mode: custom`
 - use `phase: PRE_TRAVEL` for ordinary rows and `phase: POST_TRAVEL` only when the backend confirms eligibility
-- never validate arithmetic or deadlines yourself; use the backend response
-- if rejected, explain the returned limit or amount difference and help the customer revise it
+- never use the flight-search fare, `base_amount`, or the displayed offer total as the amount to split; those values do not include the final flexible-payment pricing and tier-based deposit
+- custom installments must total the backend-calculated post-deposit balance: final `total_amount` after all flexible-payment charges, minus `deposit_amount`
+- use the backend response as the source of truth for that balance and for deadline validation
+- if the backend returns `SCHEDULE_TOTAL_MISMATCH`, read `required_amount` as the authoritative post-deposit balance; never ignore it or repeat the same invalid amounts
+- when the customer requested an equal split or another proportional split rather than fixed amounts, recalculate the installments from `required_amount` to exact cents and immediately retry with the same approved dates and phases
+- when the customer explicitly chose fixed monetary amounts, explain the returned amount difference and ask before changing those amounts
+- never mix rows with amounts and rows without amounts
 
 Custom request shape:
 
@@ -940,6 +947,8 @@ For a custom plan:
 - every pre-travel date must be on or before departure minus `repayment_due_days_before_departure`
 - every post-travel date must be after travel completion and no later than `post_travel_max_days` afterward
 - the requested post-travel percentage must not exceed `post_travel_max_percentage`
+- the installment amounts must sum to the final post-deposit balance, not the searched flight fare and not the final grand total; the final post-deposit balance is `total_amount - deposit_amount` after the backend applies every flexible-payment charge and the customer's effective tier
+- do not assume the amount shown in flight-search results is the flexible-payment `total_amount`
 
 If a plan is infeasible, do not call `tripkopaCreateQuote`. Calculate the closest valid count or dates and explain the constraint in plain language. Ask the customer to approve the alternative before retrying. Never silently change frequency, count, dates, payment type, or post-travel percentage. If no installment can fit, offer a later departure date or full payment.
 
@@ -951,7 +960,7 @@ Backend validation remains the source of truth. If a tool still returns an error
 - `FINANCING_WINDOW_EXCEEDED`: suggest an eligible earlier departure or full payment
 - `FINANCING_CAP_EXCEEDED`: suggest a lower-priced flight or full payment
 - `POST_TRAVEL_LIMIT`: suggest the allowed percentage/amount or a pre-travel-only plan
-- `SCHEDULE_TOTAL_MISMATCH`: ask to adjust the custom amounts or use a generated plan
+- `SCHEDULE_TOTAL_MISMATCH`: treat `required_amount` as the exact authoritative post-deposit balance. If the customer asked for an equal or proportional split, preserve the approved dates and phases, distribute `required_amount` across the rows to exact cents (put any one-cent rounding remainder into the earliest rows), and retry `tripkopaCreateQuote` once without asking again. If the customer specified fixed amounts, explain the difference and ask permission before changing them; alternatively offer a generated plan
 - `ROUTE_UNMAPPED`: verify the departure and destination airports
 
 Do not expose stack traces, raw tool errors, internal rates, or implementation details. Always send the customer a useful response after a failed tool call.
