@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { resend } from "@/lib/services/resend";
+import { notifications } from "@/lib/notifications/dispatcher";
 
 export type ReminderCustomer = {
   id: string;
   email: string | null;
+  whatsapp_number: string | null;
   first_name?: string | null;
   last_name?: string | null;
 };
@@ -36,7 +36,7 @@ function escapeHtml(value: string) {
     "'": "&#39;",
     "\"": "&quot;",
   };
-  return value.replace(/[&<>'"]/g, (character) => replacements[character] || character);
+  return value.replace(/[&<>'\"]/g, (character) => replacements[character] || character);
 }
 
 function money(value: number, currency: string) {
@@ -65,8 +65,6 @@ export async function sendScheduledRepaymentReminder(input: {
   reminderKind: "UPCOMING" | "DUE_TODAY" | "OVERDUE" | "GRACE";
 }) {
   const { supabase, customer, booking, installment, idempotencyKey, reminderKind } = input;
-  const email = customer.email?.trim() || "";
-  if (!email) throw new Error("Customer email is required for a repayment reminder");
   if (["PAID", "CANCELLED", "WAIVED", "DEFAULTED"].includes(installment.status)) {
     return { sent: false, reason: "INSTALLMENT_NOT_REMINDABLE" };
   }
@@ -84,6 +82,24 @@ export async function sendScheduledRepaymentReminder(input: {
   const subject = isLate
     ? `Tripkopa repayment overdue: ${formattedAmount}`
     : `Tripkopa repayment reminder: ${formattedAmount} due ${formattedDueDate}`;
+  const opening = isLate
+    ? `Your Tripkopa repayment of ${formattedAmount} for installment ${installment.sequence_number} was due on ${formattedDueDate}.`
+    : `Your Tripkopa repayment of ${formattedAmount} for installment ${installment.sequence_number} is due on ${formattedDueDate}.`;
+  const graceLine = installment.grace_due_date
+    ? `The current grace deadline is ${readableDate(installment.grace_due_date)}.`
+    : "";
+  const text = [
+    `Hello ${name},`,
+    "",
+    opening,
+    graceLine,
+    "",
+    "Reply to your Tripkopa conversation to request secure payment instructions or check your repayment status.",
+    "",
+    "If you have already paid, please disregard this reminder while your payment is being confirmed.",
+    "",
+    "Tripkopa",
+  ].filter(Boolean).join("\n");
 
   const { data: inserted, error: insertError } = await supabase
     .from("installment_reminders")
@@ -92,8 +108,8 @@ export async function sendScheduledRepaymentReminder(input: {
       booking_id: booking.id,
       installment_id: installment.id,
       idempotency_key: idempotencyKey,
-      delivery_channel: "EMAIL",
-      recipient: email,
+      delivery_channel: "MULTI",
+      recipient: null,
       subject,
       delivery_status: "PENDING",
       trigger_source: "CRON",
@@ -118,79 +134,64 @@ export async function sendScheduledRepaymentReminder(input: {
   if (reminder.installment_id !== installment.id) {
     throw new Error("Reminder idempotency key belongs to another installment");
   }
-  if (reminder.delivery_status === "SENT") {
-    return { sent: true, duplicate: true, sent_at: reminder.sent_at };
-  }
 
-  const opening = isLate
-    ? `Your Tripkopa repayment of ${formattedAmount} for installment ${installment.sequence_number} was due on ${formattedDueDate}.`
-    : `Your Tripkopa repayment of ${formattedAmount} for installment ${installment.sequence_number} is due on ${formattedDueDate}.`;
-  const graceLine = installment.grace_due_date
-    ? `The current grace deadline is ${readableDate(installment.grace_due_date)}.`
-    : "";
-  const providerKey = `tripkopa-reminder-${createHash("sha256")
-    .update(`${customer.id}:${idempotencyKey}`)
-    .digest("hex")}`;
+  const result = await notifications.send({
+    supabase,
+    customerId: customer.id,
+    notificationType: "REPAYMENT_REMINDER",
+    entityType: "installment_reminder",
+    entityId: reminder.id,
+    idempotencyKey: `tripkopa-reminder:${customer.id}:${idempotencyKey}`,
+    recipient: customer,
+    message: {
+      subject,
+      text,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#17202a;max-width:600px;margin:0 auto">
+          <h2 style="color:#0b6b57">${isLate ? "Repayment overdue" : "Repayment reminder"}</h2>
+          <p>Hello ${escapeHtml(name)},</p>
+          <p>${escapeHtml(opening)}</p>
+          ${graceLine ? `<p><strong>${escapeHtml(graceLine)}</strong></p>` : ""}
+          <p>Reply to your Tripkopa conversation to request secure payment instructions or check your repayment status.</p>
+          <p style="color:#5f6b76">If you have already paid, please disregard this reminder while your payment is being confirmed.</p>
+          <p>Tripkopa</p>
+        </div>
+      `,
+    },
+    metadata: {
+      booking_id: booking.id,
+      installment_id: installment.id,
+      reminder_kind: reminderKind,
+    },
+  });
 
-  let delivered: { id: string };
-  try {
-    delivered = await resend.sendEmail(
-      {
-        to: email,
-        subject,
-        text: [
-          `Hello ${name},`,
-          "",
-          opening,
-          graceLine,
-          "",
-          "Please return to your Tripkopa conversation to request secure payment instructions or check your repayment status.",
-          "",
-          "If you have already paid, please disregard this reminder while your payment is being confirmed.",
-          "",
-          "Tripkopa",
-        ].filter(Boolean).join("\n"),
-        html: `
-          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#17202a;max-width:600px;margin:0 auto">
-            <h2 style="color:#0b6b57">${isLate ? "Repayment overdue" : "Repayment reminder"}</h2>
-            <p>Hello ${escapeHtml(name)},</p>
-            <p>${escapeHtml(opening)}</p>
-            ${graceLine ? `<p><strong>${escapeHtml(graceLine)}</strong></p>` : ""}
-            <p>Please return to your Tripkopa conversation to request secure payment instructions or check your repayment status.</p>
-            <p style="color:#5f6b76">If you have already paid, please disregard this reminder while your payment is being confirmed.</p>
-            <p>Tripkopa</p>
-          </div>
-        `,
-      },
-      { idempotencyKey: providerKey },
-    );
-  } catch (error) {
-    await supabase
-      .from("installment_reminders")
-      .update({
-        delivery_status: "FAILED",
-        delivery_error: error instanceof Error ? error.message.slice(0, 1000) : "Email delivery failed",
-        attempted_at: new Date().toISOString(),
-      })
-      .eq("id", reminder.id)
-      .neq("delivery_status", "SENT");
-    throw error;
-  }
-
+  const newlySent = result.deliveries.filter(
+    (delivery) => delivery.status === "SENT" && !delivery.duplicate,
+  );
+  const providerMessageId = result.deliveries.find(
+    (delivery) => delivery.status === "SENT",
+  )?.provider_message_id || null;
   const sentAt = new Date().toISOString();
-  const { data: markedSent, error: updateError } = await supabase
+  const failureSummary = result.deliveries
+    .filter((delivery) => delivery.status === "FAILED")
+    .map((delivery) => `${delivery.channel}: ${delivery.error}`)
+    .join("; ");
+  const { error: reminderUpdateError } = await supabase
     .from("installment_reminders")
     .update({
-      delivery_status: "SENT",
-      provider_message_id: delivered.id,
-      delivery_error: null,
-      sent_at: sentAt,
+      delivery_channel: result.channels.join(","),
+      delivery_status: result.sent ? "SENT" : "FAILED",
+      provider_message_id: providerMessageId,
+      delivery_error: failureSummary || null,
+      attempted_at: sentAt,
+      sent_at: result.sent ? sentAt : null,
     })
-    .eq("id", reminder.id)
-    .neq("delivery_status", "SENT")
-    .select("id,sent_at")
-    .maybeSingle();
-  if (updateError) throw updateError;
+    .eq("id", reminder.id);
+  if (reminderUpdateError) throw reminderUpdateError;
+
+  if (!result.sent) {
+    throw new Error(failureSummary || "All configured reminder channels failed");
+  }
 
   const { count, error: countError } = await supabase
     .from("installment_reminders")
@@ -204,19 +205,25 @@ export async function sendScheduledRepaymentReminder(input: {
     .eq("id", installment.id);
   if (installmentError) throw installmentError;
 
-  if (markedSent) {
+  if (newlySent.length) {
     await supabase.from("operational_events").insert({
       customer_id: customer.id,
       booking_id: booking.id,
       event_type: "installment.reminder_sent",
       payload: {
         installment_id: installment.id,
-        channel: "EMAIL",
+        channels: newlySent.map((delivery) => delivery.channel),
+        deliveries: newlySent,
         trigger_source: "CRON",
         reminder_kind: reminderKind,
-        provider_message_id: delivered.id,
       },
     });
   }
-  return { sent: true, sent_at: markedSent?.sent_at || sentAt };
+  return {
+    sent: true,
+    duplicate: newlySent.length === 0,
+    partial_failure: result.partial_failure,
+    deliveries: result.deliveries,
+    sent_at: sentAt,
+  };
 }

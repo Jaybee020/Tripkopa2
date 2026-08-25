@@ -266,7 +266,7 @@
     {
       "method": "GET",
       "path": "/api/cron/repayment-reminders",
-      "purpose": "Evaluate repayment schedules and send idempotent reminder emails on configured due-date offsets.",
+      "purpose": "Evaluate repayment schedules and send idempotent reminders through one or more configured notification channels.",
       "auth": "cron_secret",
       "request_schema_name": null,
       "response_schema_name": null,

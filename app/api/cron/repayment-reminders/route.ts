@@ -97,7 +97,7 @@ export async function GET(request: Request) {
   const customerIds = [...new Set(installments.map((item) => item.customer_id))];
   const [{ data: bookingRows, error: bookingError }, { data: customerRows, error: customerError }] = await Promise.all([
     admin.from("bookings").select("id,customer_id,status,currency").in("id", bookingIds),
-    admin.from("customers").select("id,email,first_name,last_name").in("id", customerIds),
+    admin.from("customers").select("id,email,whatsapp_number,first_name,last_name").in("id", customerIds),
   ]);
   if (bookingError) throw bookingError;
   if (customerError) throw customerError;

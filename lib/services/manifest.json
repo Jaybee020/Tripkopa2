@@ -150,6 +150,50 @@
       "version": "1.0.0",
       "generated_at": "2026-04-08T00:00:00Z"
     },
+    "whatsapp": {
+      "file": "src/lib/services/whatsapp.ts",
+      "category": "messaging",
+      "display_name": "Meta WhatsApp Cloud API",
+      "description": "Composable outbound WhatsApp messaging through Meta Graph API. Supports dynamic recipients and text messages with normalized provider errors.",
+      "sdk_package": null,
+      "deps": [],
+      "env": [
+        {
+          "name": "WHATSAPP_ACCESS_TOKEN",
+          "description": "Meta access token authorized to send messages for the configured business phone number.",
+          "example": "EAAG...",
+          "required": true,
+          "group": "WhatsApp"
+        },
+        {
+          "name": "WHATSAPP_PHONE_NUMBER_ID",
+          "description": "Meta WhatsApp Business phone number ID used as the sender.",
+          "example": "123456789012345",
+          "required": true,
+          "group": "WhatsApp"
+        },
+        {
+          "name": "WHATSAPP_API_VERSION",
+          "description": "Meta Graph API version. Defaults to v24.0.",
+          "example": "v24.0",
+          "required": false,
+          "group": "WhatsApp"
+        },
+        {
+          "name": "WHATSAPP_RECIPIENT",
+          "description": "Optional fallback recipient for one-off sendText tests. Production notifications pass each customer number dynamically.",
+          "example": "2348012345678",
+          "required": false,
+          "group": "WhatsApp"
+        }
+      ],
+      "exports": {
+        "class": "WhatsAppService",
+        "singleton": "whatsapp"
+      },
+      "version": "1.0.0",
+      "generated_at": "2026-08-25T00:00:00Z"
+    },
     "posthog": {
       "file": "src/lib/services/posthog.ts",
       "category": "analytics",

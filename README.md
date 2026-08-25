@@ -28,6 +28,20 @@ NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 WHATSAPP_AGENT_API_SECRET=use-a-long-random-secret
+WHATSAPP_ACCESS_TOKEN=meta-cloud-api-access-token
+WHATSAPP_PHONE_NUMBER_ID=meta-business-phone-number-id
+# Optional; defaults to v24.0.
+WHATSAPP_API_VERSION=v24.0
+# Optional fallback recipient for one-off service tests; production calls pass `to` dynamically.
+WHATSAPP_RECIPIENT=2348012345678
+# Notification routing. Each value is a comma-separated channel list.
+# Per-type settings override the global fallback; defaults to WHATSAPP.
+NOTIFICATION_CHANNELS=WHATSAPP
+KYC_SUCCESS_NOTIFICATION_CHANNELS=WHATSAPP,EMAIL
+REPAYMENT_REMINDER_NOTIFICATION_CHANNELS=WHATSAPP
+# Required whenever EMAIL appears in a configured channel list.
+RESEND_API_KEY=re_xxx
+RESEND_FROM_EMAIL="Tripkopa <noreply@example.com>"
 ONECAP_PARTNER_BASE_URL=https://onecap.example.com
 ONECAP_PARTNER_API_KEY=partner-key-issued-to-tripkopa
 ONECAP_PARTNER_WEBHOOK_SECRET=independent-hmac-webhook-secret

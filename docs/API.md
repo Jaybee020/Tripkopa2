@@ -228,7 +228,7 @@ Otherwise, `session` contains `status`, `provider`, `expires_at`, and `normalize
 
 ## KYC workflow
 
-The expected sequence is create session → open returned link → exchange token → consent → verify BVN. Complete the customer's full legal first, middle, and last names and email before BVN verification. After verification and wallet provisioning succeed, the backend sends an idempotent KYC-success email through Resend. The message never contains the customer's BVN. A later KYC-status read retries the confirmation if its earlier delivery attempt failed.
+The expected sequence is create session → open returned link → exchange token → consent → verify BVN. Complete the customer's full legal first, middle, and last names and email before BVN verification. After verification and wallet provisioning succeed, the backend sends an idempotent KYC-success notification through every channel in `KYC_SUCCESS_NOTIFICATION_CHANNELS`. The message never contains the customer's BVN. A later KYC-status read retries any failed channel. Its response includes `success_notification`, with the configured channels and each channel's independent delivery state.
 
 ### 1. Create a KYC session
 
@@ -611,7 +611,9 @@ The itinerary response contains `booking_id`, `release_level`, `segments`, and p
 
 Repayment and financing reads evaluate due dates before returning. Installments may transition to `OVERDUE`, `GRACE`, or `DEFAULTED`; a final default moves the booking to `CANCELLATION_REVIEW`.
 
-Repayment reminders are backend-driven. Vercel calls `GET /api/cron/repayment-reminders` every day at 08:00 UTC, authenticated with `CRON_SECRET`. By default, the job emails customers 7, 3, and 1 day before each installment, on the due date, and 1, 2, 3, and 7 days after it becomes overdue. Configure these offsets with `REPAYMENT_REMINDER_DAYS_BEFORE` and `REPAYMENT_OVERDUE_REMINDER_DAYS`. Every scheduled reminder has a deterministic idempotency key, is counted only after Resend accepts it, and produces an operational event. This cron endpoint is internal and must not be exposed as an agent tool.
+Repayment reminders are backend-driven. Vercel calls `GET /api/cron/repayment-reminders` every day at 08:00 UTC, authenticated with `CRON_SECRET`. By default, the job notifies customers 7, 3, and 1 day before each installment, on the due date, and 1, 2, 3, and 7 days after it becomes overdue. Configure delivery with `REPAYMENT_REMINDER_NOTIFICATION_CHANNELS` and the timing offsets with `REPAYMENT_REMINDER_DAYS_BEFORE` and `REPAYMENT_OVERDUE_REMINDER_DAYS`. Each channel has an independent deterministic idempotency key and provider delivery record. A reminder counts once when at least one configured channel succeeds. This cron endpoint is internal and must not be exposed as an agent tool.
+
+Channel lists are comma-separated. `KYC_SUCCESS_NOTIFICATION_CHANNELS=EMAIL,WHATSAPP` sends both; `REPAYMENT_REMINDER_NOTIFICATION_CHANNELS=EMAIL` sends only email. If a per-type variable is absent, the backend uses `NOTIFICATION_CHANNELS`, then defaults to `WHATSAPP`. Adding a future channel such as SMS requires registering an adapter with the notification dispatcher; business flows and delivery persistence do not need channel-specific columns.
 
 ### Financing profile
 

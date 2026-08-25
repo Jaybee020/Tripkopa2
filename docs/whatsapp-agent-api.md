@@ -171,7 +171,7 @@ Response:
 Possible statuses include `NOT_STARTED`, `PENDING`, `CONSENTED`, `VERIFIED`,
 and provider-specific failure/review states.
 
-When BVN verification and wallet provisioning complete successfully, the backend automatically sends a KYC confirmation to the email stored on the customer's profile. The email is idempotent and never contains the BVN. The returned session may include `success_email_status` and `success_email_sent_at`; a KYC-status read retries a previously failed confirmation email.
+When BVN verification and wallet provisioning complete successfully, the backend automatically sends a KYC confirmation through the configured notification channels. Each channel is idempotent and the message never contains the BVN. A KYC-status read returns `success_notification` and retries only failed channel deliveries.
 
 ### Create KYC Session
 
@@ -461,7 +461,7 @@ Response:
 }
 ```
 
-`GET` evaluates overdue and grace state before returning. Repayment-reminder emails are sent automatically by the protected backend cron according to the installment due dates. The WhatsApp agent does not trigger or record these emails and should not be given a reminder-send tool.
+`GET` evaluates overdue and grace state before returning. Repayment reminders are sent automatically through the configured backend channels according to installment due dates. The customer agent does not trigger or record these messages and should not be given a reminder-send tool.
 
 ## Wallet
 

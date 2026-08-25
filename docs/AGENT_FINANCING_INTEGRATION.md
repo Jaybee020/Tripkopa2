@@ -11,7 +11,7 @@ This document describes the customer-agent changes required for Tripkopa's trust
 - modified flight-search, quote, revalidation, and booking tools;
 - generated and customer-proposed repayment plans;
 - quote-version handling;
-- automatic KYC and repayment email notifications;
+- configurable, multi-channel KYC and repayment notifications;
 - endpoints that must not be exposed to the customer agent.
 
 This document supplements the complete [WhatsApp Agent API](./whatsapp-agent-api.md).
@@ -392,9 +392,9 @@ The preliminary acknowledgement is a normal `sendMessage` action and does not re
 
 ## 9. Notifications Are Backend-Owned
 
-### 9.1 Successful KYC email
+### 9.1 Successful KYC notification
 
-After BVN verification and virtual-account provisioning succeed, the backend automatically emails the customer. The email:
+After BVN verification and virtual-account provisioning succeed, the backend automatically notifies the customer through each configured channel. The notification:
 
 - confirms identity-verification success;
 - confirms that the dedicated Tripkopa wallet account is ready;
@@ -402,7 +402,7 @@ After BVN verification and virtual-account provisioning succeed, the backend aut
 - uses provider-level idempotency to avoid duplicates;
 - is retried by a later KYC-status read if a prior delivery attempt failed.
 
-The customer agent must not call a separate KYC-email tool.
+The customer agent must not call a separate KYC-message tool.
 
 ### 9.2 Repayment-reminder cron
 
@@ -415,13 +415,13 @@ Authorization: Bearer <CRON_SECRET>
 
 Default schedule:
 
-| Timing | Email action |
+| Timing | Notification action |
 | --- | --- |
 | 7, 3, and 1 day before an installment | Upcoming reminder |
 | Due date | Due-today reminder |
 | 1, 2, 3, and 7 days overdue | Overdue or grace reminder |
 
-The cron processes unpaid and partially paid installments, recalculates lifecycle states, sends through Resend, prevents duplicates with deterministic idempotency keys, and counts a reminder only after provider acceptance.
+The cron processes unpaid and partially paid installments, recalculates lifecycle states, fans out through the configured channel adapters, prevents per-channel duplicates with deterministic database idempotency keys, and counts a reminder once when at least one channel succeeds.
 
 This endpoint is backend-only. Do not register it as an agent tool and never give the agent `CRON_SECRET`.
 
@@ -447,10 +447,15 @@ Required backend environment variables:
 
 ```text
 WHATSAPP_AGENT_API_SECRET
+WHATSAPP_ACCESS_TOKEN
+WHATSAPP_PHONE_NUMBER_ID
+WHATSAPP_API_VERSION=v24.0
 RESEND_API_KEY
 RESEND_FROM_EMAIL
 CRON_SECRET
 ```
+
+The Meta variables are required when any configured list contains `WHATSAPP`. The Resend variables are required when any configured list contains `EMAIL`.
 
 Optional reminder configuration:
 
@@ -458,6 +463,9 @@ Optional reminder configuration:
 REPAYMENT_REMINDER_DAYS_BEFORE=7,3,1,0
 REPAYMENT_OVERDUE_REMINDER_DAYS=1,2,3,7
 REPAYMENT_REMINDER_BATCH_SIZE=500
+NOTIFICATION_CHANNELS=WHATSAPP
+KYC_SUCCESS_NOTIFICATION_CHANNELS=WHATSAPP,EMAIL
+REPAYMENT_REMINDER_NOTIFICATION_CHANNELS=WHATSAPP
 ```
 
 Apply these migrations before deployment:
@@ -466,6 +474,7 @@ Apply these migrations before deployment:
 supabase/migrations/0006_financing_engine.sql
 supabase/migrations/0007_email_repayment_reminders.sql
 supabase/migrations/0008_quote_recovery.sql
+supabase/migrations/0011_multichannel_notifications.sql
 ```
 
 ## 12. Implementation Checklist

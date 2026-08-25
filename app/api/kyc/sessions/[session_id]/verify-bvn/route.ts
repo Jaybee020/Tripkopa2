@@ -4,7 +4,7 @@ import { requireKycSessionAccess } from "@/lib/auth/kyc";
 import { qoreid } from "@/lib/services/qoreid";
 import { onecap } from "@/lib/services/onecap";
 import { bad, failure } from "@/lib/api-utils";
-import { sendKycSuccessEmail } from "@/lib/kyc-notifications";
+import { sendKycSuccessNotifications } from "@/lib/kyc-notifications";
 
 const Input = z.object({ bvn: z.string().regex(/^\d{11}$/) }).strict();
 
@@ -277,14 +277,15 @@ export async function POST(
         throw kycError;
       }
       try {
-        await sendKycSuccessEmail(supabase, session_id, {
+        await sendKycSuccessNotifications(supabase, session_id, {
           id: customer.id,
           email: profile.email,
+          whatsapp_number: completeProfile.whatsapp_number,
           first_name: profile.first_name,
           last_name: profile.last_name,
         });
-      } catch (emailError) {
-        logBvnError("send_kyc_success_email", emailError, context);
+      } catch (notificationError) {
+        logBvnError("send_kyc_success_notifications", notificationError, context);
       }
       return NextResponse.json({ status: "success", virtual_account: existing });
     }
@@ -385,14 +386,15 @@ export async function POST(
       }
 
       try {
-        await sendKycSuccessEmail(supabase, session_id, {
+        await sendKycSuccessNotifications(supabase, session_id, {
           id: customer.id,
           email: profile.email,
+          whatsapp_number: completeProfile.whatsapp_number,
           first_name: profile.first_name,
           last_name: profile.last_name,
         });
-      } catch (emailError) {
-        logBvnError("send_kyc_success_email", emailError, context);
+      } catch (notificationError) {
+        logBvnError("send_kyc_success_notifications", notificationError, context);
       }
 
       return NextResponse.json(
