@@ -381,7 +381,9 @@ export const LedgerEntryList = z.object({
 export type LedgerEntryList = z.infer<typeof LedgerEntryList>;
 export const PaymentIntentCreateInput = z.object({
   booking_id: Id.optional(),
-  amount: z.number().int().positive(),
+  amount: z.number().positive().refine(Number.isInteger, {
+    message: "amount must be an integer in minor units (kobo for NGN)",
+  }),
   currency: z.string().length(3).default("NGN"),
   email: z.string().email().optional(),
   payment_type: z.string().default("booking"),

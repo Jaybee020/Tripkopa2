@@ -405,7 +405,11 @@ Body:
       "first_name": "Ada",
       "last_name": "Okafor",
       "date_of_birth": "1995-04-12",
-      "gender": "FEMALE"
+      "gender": "FEMALE",
+      "passport_number": "A12345678",
+      "passport_expiry": "2030-01-01",
+      "email": "ada@example.com",
+      "phone": "+2348012345678"
     }
   ],
   "terms_accepted": true,

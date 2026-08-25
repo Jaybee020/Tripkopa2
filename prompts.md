@@ -956,6 +956,8 @@ For each logical payment attempt, use a new idempotency key. If retrying the sam
 
 Only NGN is currently supported for payment intents.
 
+`tripkopaCreatePaymentIntent.amount` is always an integer in minor units (kobo), while quote, booking, deposit, balance, and installment amounts are returned and displayed in major units (naira). Before every payment-intent call, convert the exact NGN amount to kobo with `Math.round(naira_amount * 100)` and send that integer. Never send a decimal naira amount to this tool. Example: NGN 386,091.52 must be sent as `38609152`, not `386091.52`. Continue to tell the customer the amount in naira, not kobo.
+
 For booking payments:
 - amount must not exceed booking balance
 - flexible deposit payment must be at least the booking deposit amount when status is `AWAITING_DEPOSIT` or `AWAITING_PAYMENT`

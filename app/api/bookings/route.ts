@@ -5,6 +5,7 @@ import { requireAgentCustomer } from "@/lib/auth/agent";
 import { bad, failure } from "@/lib/api-utils";
 import { toCustomerBooking, type CustomerBookingRow } from "@/lib/itinerary-delivery";
 import { applyBookingPayment } from "@/lib/booking-payments";
+import { normalizeTakeTripsPassengers } from "@/lib/taketrips-passengers";
 
 type QuoteDetails = {
   offer?: unknown;
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
   try {
     const input = BookingCreateInput.parse(await request.json());
     const { customer, supabase } = await requireAgentCustomer(request);
+    const passengers = normalizeTakeTripsPassengers(input.passengers);
 
     const { data: quote, error: quoteError } = await supabase
       .from("quotes")
@@ -102,7 +104,7 @@ export async function POST(request: Request) {
         grace_deadline: repaymentPlan?.grace_deadline || null,
         post_travel_amount: repaymentPlan?.post_travel_amount || 0,
         post_travel_deadline: repaymentPlan?.post_travel_deadline || null,
-        passengers: input.passengers,
+        passengers,
         flight_details: details.offer ?? quote.details,
       })
       .select("*")

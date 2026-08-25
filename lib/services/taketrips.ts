@@ -1,5 +1,6 @@
 import { ServiceAuthError, ServiceError } from "./errors";
 import { supabase } from "./supabase";
+import { normalizeTakeTripsPassengers } from "@/lib/taketrips-passengers";
 
 const PROVIDER = "taketrips";
 const DEFAULT_BASE_URL = "https://appsconnect.taketrips.co";
@@ -211,7 +212,11 @@ export class TakeTripsService {
   }
 
   order(offer: unknown, passengers: unknown[], paymentRef?: string) {
-    const payload = { flightOffer: offer, passengers, paymentRef };
+    const payload = {
+      flightOffer: offer,
+      passengers: normalizeTakeTripsPassengers(passengers),
+      paymentRef,
+    };
     return call<Record<string, unknown>>(
       "order",
       "/resellers/flights/order",

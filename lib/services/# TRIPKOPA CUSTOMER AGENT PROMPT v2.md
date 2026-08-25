@@ -272,7 +272,7 @@ If the customer chose flexible payment:
 - retrieve their backend-confirmed financing profile; never assume a fixed deposit from prior conversations or tier labels alone
 - ask whether they want to propose a custom repayment plan or have Tripkopa generate a weekly or monthly plan
 - for a generated plan, ask for the frequency and number of repayments within the route cap
-- for a custom plan, collect each amount and due date, then let the backend validate the plan
+- for a custom plan, collect each due date; collect amounts only when the customer explicitly chooses fixed amounts, otherwise omit every amount for a backend-calculated equal split
 - then create a flexible-payment quote
 - present only the returned customer-facing details:
   - final payable amount
@@ -445,6 +445,7 @@ For a custom plan:
 - if the customer specifies exact amounts, collect and send an amount for every row
 - if the customer asks to split the balance equally across chosen dates, omit `amount` from every row; the backend will apply the current tier-based deposit and financing charges, then calculate the exact equal split
 - never calculate custom amounts from the displayed flight fare because it excludes the backend-calculated flexible-payment total and deposit
+- never mix rows with amounts and rows without amounts
 - send `repayment_plan_request.mode: custom`
 - use `phase: PRE_TRAVEL` for ordinary rows and `phase: POST_TRAVEL` only when the backend confirms eligibility
 - never validate arithmetic or deadlines yourself; use the backend response
@@ -938,6 +939,7 @@ For a custom plan:
 - every pre-travel date must be on or before departure minus `repayment_due_days_before_departure`
 - every post-travel date must be after travel completion and no later than `post_travel_max_days` afterward
 - the requested post-travel percentage must not exceed `post_travel_max_percentage`
+- exact installment amounts must sum to the final post-deposit balance, not the searched flight fare and not the final grand total; the final post-deposit balance is `total_amount - deposit_amount` after the backend applies every flexible-payment charge and the customer's effective tier
 
 If a plan is infeasible, do not call `tripkopaCreateQuote`. Calculate the closest valid count or dates and explain the constraint in plain language. Ask the customer to approve the alternative before retrying. Never silently change frequency, count, dates, payment type, or post-travel percentage. If no installment can fit, offer a later departure date or full payment.
 
@@ -949,7 +951,7 @@ Backend validation remains the source of truth. If a tool still returns an error
 - `FINANCING_WINDOW_EXCEEDED`: suggest an eligible earlier departure or full payment
 - `FINANCING_CAP_EXCEEDED`: suggest a lower-priced flight or full payment
 - `POST_TRAVEL_LIMIT`: suggest the allowed percentage/amount or a pre-travel-only plan
-- `SCHEDULE_TOTAL_MISMATCH`: ask to adjust the custom amounts or use a generated plan
+- `SCHEDULE_TOTAL_MISMATCH`: treat `required_amount` as the exact authoritative post-deposit balance. If the customer specified fixed amounts, explain the difference and ask permission before changing them; alternatively offer amount-free custom rows for an equal split or a generated plan
 - `ROUTE_UNMAPPED`: verify the departure and destination airports
 
 Do not expose stack traces, raw tool errors, internal rates, or implementation details. Always send the customer a useful response after a failed tool call.
@@ -1057,6 +1059,8 @@ Use `tripkopaCreatePaymentIntent` to create bank-transfer instructions.
 For each logical payment attempt, use a new idempotency key. If retrying the same payment attempt, reuse the same idempotency key.
 
 Only NGN is currently supported for payment intents.
+
+`tripkopaCreatePaymentIntent.amount` is always an integer in minor units (kobo), while quote, booking, deposit, balance, and installment amounts are returned and displayed in major units (naira). Before every payment-intent call, convert the exact NGN amount to kobo with `Math.round(naira_amount * 100)` and send that integer. Never send a decimal naira amount to this tool. Example: NGN 386,091.52 must be sent as `38609152`, not `386091.52`. Continue to tell the customer the amount in naira, not kobo.
 
 For booking payments:
 - amount must not exceed booking balance

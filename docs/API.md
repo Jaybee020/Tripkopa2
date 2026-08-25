@@ -552,7 +552,12 @@ curl -X POST "$TRIPKOPA_URL/api/bookings" \
       "title":"MR",
       "first_name":"John",
       "last_name":"Doe",
-      "date_of_birth":"1990-01-01"
+      "date_of_birth":"1990-01-01",
+      "gender":"MALE",
+      "passport_number":"A12345678",
+      "passport_expiry":"2030-01-01",
+      "email":"john.doe@example.com",
+      "phone":"+2348012345678"
     }],
     "terms_accepted":true,
     "payment_preference":"flexible"
@@ -560,6 +565,8 @@ curl -X POST "$TRIPKOPA_URL/api/bookings" \
 ```
 
 `booking_type` must be `full` or `flexible`; `passengers` must contain at least one object. `terms_accepted` defaults to `false`.
+
+Passenger input accepts either Tripkopa snake-case fields or TakeTrips camel-case fields. The backend validates the required identity and contact fields, normalizes them to `firstName`, `lastName`, `dob`, `passportNumber`, and `passportExpiry`, and stores the normalized payload before any payment can be requested.
 
 When terms are accepted:
 
