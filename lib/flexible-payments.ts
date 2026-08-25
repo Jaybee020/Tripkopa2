@@ -130,9 +130,15 @@ function addMonths(date: Date, months: number) {
 function markupRate(rules: FinancingRules, category: RouteCategory, weeks: number) {
   const bracket = rules.markup[category].find(([maximumWeeks]) => weeks <= maximumWeeks);
   if (!bracket) {
+    const maximumWeeks = rules.max_financing_weeks[category];
     throw Object.assign(
-      new Error(`Flexible payment cannot exceed ${rules.max_financing_weeks[category]} weeks for this route`),
-      { status: 422, code: "FINANCING_WINDOW_EXCEEDED", route_category: category },
+      new Error(`Flexible payment cannot exceed ${maximumWeeks} weeks for this route`),
+      {
+        status: 422,
+        code: "FINANCING_WINDOW_EXCEEDED",
+        route_category: category,
+        maximum_weeks: maximumWeeks,
+      },
     );
   }
   return bracket[1];

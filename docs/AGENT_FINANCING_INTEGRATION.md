@@ -25,6 +25,7 @@ This document supplements the complete [WhatsApp Agent API](./whatsapp-agent-api
 | `tripkopaGetFinancingProfile` | `GET /api/me/financing` | New | Add this tool. Call it before negotiating or creating a flexible plan. |
 | `tripkopaSearchFlights` | `POST /api/flights/searches` | Modified | Add optional `ticket_type`. Do not send financing terms to this endpoint. |
 | `tripkopaCreateQuote` | `POST /api/quotes` | Modified | Add `repayment_plan_request` for generated or custom plans. |
+| `tripkopaPreflightQuote` | `POST /api/quotes/preflight` | New | Run the authoritative quote and financing checks without creating a quote; business-rule failures return `200` with `valid: false`. |
 | `tripkopaRevalidateQuote` | `POST /api/quotes/{quote_id}/revalidate` | Modified | Retain the returned quote `version` and all recalculated terms. |
 | `tripkopaCreateBooking` | `POST /api/bookings` | Modified | Send the latest revalidated version as `quote_version`. |
 | `tripkopaGetRepaymentSchedule` | `GET /api/bookings/{booking_id}/repayment` | Behaviour updated | Handle `OVERDUE`, `GRACE`, `DEFAULTED`, and booking `CANCELLATION_REVIEW`. |
@@ -379,7 +380,8 @@ sendMessage(short acknowledgement)
   -> create KYC session if not verified; stop quote creation until VERIFIED
   -> tripkopaGetFinancingProfile
   -> ask custom plan or generated weekly/monthly plan
-  -> tripkopaCreateQuote
+  -> tripkopaPreflightQuote with the proposed quote payload
+  -> if valid, tripkopaCreateQuote with that unchanged payload
   -> present backend-returned deposit and schedule
   -> customer accepts terms
   -> tripkopaRevalidateQuote
@@ -480,6 +482,7 @@ supabase/migrations/0011_multichannel_notifications.sql
 ## 12. Implementation Checklist
 
 - [ ] Add `tripkopaGetFinancingProfile`.
+- [ ] Add `tripkopaPreflightQuote` as `POST /api/quotes/preflight` and require it immediately before quote creation.
 - [ ] Keep `tripkopaCreateQuote` registered as `POST /api/quotes`.
 - [ ] Add `ticket_type` to the flight-search schema.
 - [ ] Add `repayment_plan_request` to quote creation.

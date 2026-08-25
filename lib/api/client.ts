@@ -5,7 +5,7 @@
 // pages and IntegrationAgent should import from here instead of
 // rolling their own fetch() calls.
 
-import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FinancingProfile, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingDetail, OperationsBookingList, OperationsRuleConfig, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuoteRevalidationInput, QuoteRevalidationResult, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
+import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FinancingProfile, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingDetail, OperationsBookingList, OperationsRuleConfig, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuotePreflightResult, QuoteRevalidationInput, QuoteRevalidationResult, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
 
 export class ApiError extends Error {
   public readonly code?: string;
@@ -120,6 +120,10 @@ export async function getFlightsSearchesBySearchId(context: AgentRequestContext,
 
 export async function createQuotes(context: AgentRequestContext, body: QuoteCreateInput): Promise<Quote> {
   return request<Quote>("POST", "/api/quotes", body, agentHeaders(context));
+}
+
+export async function preflightQuote(context: AgentRequestContext, body: QuoteCreateInput): Promise<QuotePreflightResult> {
+  return request<QuotePreflightResult>("POST", "/api/quotes/preflight", body, agentHeaders(context));
 }
 
 export async function getQuotesByQuoteId(context: AgentRequestContext, quote_id: string): Promise<Quote> {

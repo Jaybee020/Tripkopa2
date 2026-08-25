@@ -402,6 +402,30 @@ Returns `201` with a stored search record whose `results` field contains the pro
 POST /api/quotes
 ```
 
+Before creating a quote, call the preflight endpoint with the identical body:
+
+```http
+POST /api/quotes/preflight
+```
+
+Preflight runs the same offer resolution, KYC, trust-tier, route, cap, financing-window, installment, deadline, post-travel, and amount checks as quote creation, but does not insert a quote. Business-rule failures return HTTP `200` so agent runtimes do not terminate the conversation:
+
+```json
+{
+  "valid": false,
+  "status": "ADJUSTMENT_REQUIRED",
+  "issue": {
+    "message": "Flexible payment cannot exceed 24 weeks for this route",
+    "code": "FINANCING_WINDOW_EXCEEDED",
+    "route_category": "international",
+    "maximum_weeks": 24,
+    "latest_eligible_departure_date": "2027-02-09"
+  }
+}
+```
+
+Only call `POST /api/quotes` after preflight returns `valid: true`, using the exact same request body.
+
 Creates a full-payment or flexible-payment quote from a stored flight search. Flexible quotes require latest KYC status `VERIFIED`.
 
 For TakeTrips responses shaped as a single offer (`{ "status": true, "details": {...} }`), use `offer_index: 0`; the backend selects `details` as the offer. For TakeTrips responses shaped as a list (`{ "status": true, "details": [...] }`), `offer_index` selects from that `details` array.

@@ -293,6 +293,14 @@ GET /api/flights/searches/{search_id}
 
 ## Quotes
 
+### Preflight Quote
+
+```http
+POST /api/quotes/preflight
+```
+
+Send the same body intended for `POST /api/quotes`. The endpoint runs the authoritative pricing and financing checks without creating a quote. A business-rule problem returns HTTP `200` with `valid: false`, `status: "ADJUSTMENT_REQUIRED"`, and an `issue` object. Revise the proposal with the customer and preflight again. Create the quote only after receiving `valid: true`.
+
 ### Create Quote
 
 ```http

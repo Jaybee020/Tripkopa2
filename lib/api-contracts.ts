@@ -237,6 +237,28 @@ export const QuoteCreateInput = z
     message: "Use either installment_count or repayment_plan_request, not both",
   });
 export type QuoteCreateInput = z.infer<typeof QuoteCreateInput>;
+export const QuotePreflightResult = z.discriminatedUnion("valid", [
+  z.object({
+    valid: z.literal(true),
+    status: z.literal("READY"),
+    search_id: Id,
+    offer_index: z.number().int().nonnegative(),
+    route_category: z.string().nullable(),
+    departure_date: z.string(),
+    currency: z.string(),
+    pricing: Any,
+    rule_version: z.string(),
+  }),
+  z.object({
+    valid: z.literal(false),
+    status: z.literal("ADJUSTMENT_REQUIRED"),
+    issue: z.object({
+      message: z.string(),
+      code: z.string().optional(),
+    }).passthrough(),
+  }),
+]);
+export type QuotePreflightResult = z.infer<typeof QuotePreflightResult>;
 export const Quote = z
   .object({
     id: Id,

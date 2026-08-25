@@ -6,6 +6,7 @@ export function failure(error: unknown) {
     "code",
     "route_category",
     "maximum_installments",
+    "maximum_weeks",
     "maximum_percentage",
     "maximum_amount",
     "financing_cap",

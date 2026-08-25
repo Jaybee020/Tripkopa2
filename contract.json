@@ -156,6 +156,15 @@
       "handler_file": "app/api/quotes/route.ts"
     },
     {
+      "method": "POST",
+      "path": "/api/quotes/preflight",
+      "purpose": "Validate a proposed quote with the authoritative pricing and financing rules without creating a quote or returning business-rule failures as non-2xx responses.",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": "QuoteCreateInput",
+      "response_schema_name": "QuotePreflightResult",
+      "handler_file": "app/api/quotes/preflight/route.ts"
+    },
+    {
       "method": "GET",
       "path": "/api/quotes/[quote_id]",
       "purpose": "",

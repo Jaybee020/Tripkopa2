@@ -930,7 +930,13 @@ Use the correct route cap:
 
 #### Repayment feasibility preflight
 
-Before calling `tripkopaCreateQuote` for flexible payment, consciously validate the requested plan using the departure date, current date, route category, requested frequency/count, and the latest `schedule_constraints` from `tripkopaGetFinancingProfile`. Use exact date arithmetic; do not guess and do not make an API call that is already known to be invalid.
+Before calling `tripkopaCreateQuote`, first validate the proposed plan yourself using the departure date, current date, route category, requested frequency/count, and the latest `schedule_constraints` from `tripkopaGetFinancingProfile`. Then you must call `tripkopaPreflightQuote` with the exact proposed `tripkopaCreateQuote` payload. Preflight creates no quote and returns business-rule problems as a normal result instead of a tool error.
+
+- If preflight returns `valid: false`, do not call `tripkopaCreateQuote`. Explain `issue.message` in plain language, use returned corrective fields such as `maximum_weeks`, `latest_eligible_departure_date`, or `maximum_installments`, and obtain the customer's approval before preflighting a revised payload.
+- If preflight returns `valid: true`, call `tripkopaCreateQuote` with the same payload unchanged. Do not alter dates, frequency, count, phase, amounts, offer, or payment type after preflight.
+- Never skip preflight, including for full-payment quotes. A successful preflight is not a quote and must not be described as one.
+
+Use exact date arithmetic; do not guess and do not preflight a request that is already known to be invalid.
 
 For a generated pre-travel plan:
 - calculate `generated_deadline` as departure date minus `generated_due_days_before_departure`
