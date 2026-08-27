@@ -46,6 +46,12 @@ type SearchRow = Record<string, unknown> & {
 
 type QuoteDetails = {
   offer?: unknown;
+  search?: {
+    origin?: string;
+    destination?: string;
+    departure_date?: string;
+    return_date?: string | null;
+  };
   booking_type?: "full" | "flexible";
   pricing?: {
     repayment_plan?: {
@@ -135,6 +141,12 @@ export async function recoverProviderQuote(input: {
   if (searchError) throw searchError;
   const search = storedSearch as SearchRow;
   const details = (record(quote.details) || {}) as QuoteDetails;
+  const selectedScope = {
+    origin: details.search?.origin || search.origin,
+    destination: details.search?.destination || search.destination,
+    departure_date: details.search?.departure_date || search.departure_date,
+    return_date: details.search?.return_date ?? search.return_date,
+  };
   const adultCount = search.adult_count || Math.max(search.passenger_count || 1, 1);
   const childrenCount = search.children_count || 0;
   const infantCount = search.infant_count || 0;
@@ -143,10 +155,10 @@ export async function recoverProviderQuote(input: {
   const ticketType = search.ticket_type || "any";
 
   const providerResults = await taketrips.search({
-    from: search.origin,
-    to: search.destination,
-    departureDate: search.departure_date,
-    returnDate: search.return_date ?? "",
+    from: selectedScope.origin,
+    to: selectedScope.destination,
+    departureDate: selectedScope.departure_date,
+    returnDate: selectedScope.return_date ?? "",
     direct,
     adult: adultCount,
     children: childrenCount,
@@ -159,10 +171,10 @@ export async function recoverProviderQuote(input: {
     .from("flight_searches")
     .insert({
       customer_id: customerId,
-      origin: search.origin,
-      destination: search.destination,
-      departure_date: search.departure_date,
-      return_date: search.return_date,
+      origin: selectedScope.origin,
+      destination: selectedScope.destination,
+      departure_date: selectedScope.departure_date,
+      return_date: selectedScope.return_date,
       trip_type: search.trip_type,
       passenger_count: adultCount + childrenCount + infantCount,
       adult_count: adultCount,
@@ -250,10 +262,10 @@ export async function recoverProviderQuote(input: {
   let pricing;
   try {
     pricing = priceQuote({
-      origin: search.origin,
-      destination: search.destination,
-      departureDate: search.departure_date,
-      travelCompletionDate: search.return_date || search.departure_date,
+      origin: selectedScope.origin,
+      destination: selectedScope.destination,
+      departureDate: selectedScope.departure_date,
+      travelCompletionDate: selectedScope.return_date || selectedScope.departure_date,
       baseAmount,
       currency: extractOfferCurrency(validatedOffer, quote.currency),
       bookingType,
@@ -301,10 +313,10 @@ export async function recoverProviderQuote(input: {
   const replacementDetails = {
     offer: validatedOffer,
     search: {
-      origin: search.origin,
-      destination: search.destination,
-      departure_date: search.departure_date,
-      return_date: search.return_date,
+      origin: selectedScope.origin,
+      destination: selectedScope.destination,
+      departure_date: selectedScope.departure_date,
+      return_date: selectedScope.return_date,
       trip_type: search.trip_type,
       passenger_count: adultCount + childrenCount + infantCount,
       adult_count: adultCount,

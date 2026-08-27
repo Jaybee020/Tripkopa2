@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAgentCustomer } from "@/lib/auth/agent";
 import { failure } from "@/lib/api-utils";
+import { explainableSearchResponse } from "@/lib/flight-search-scope";
 
 export async function GET(
   request: Request,
@@ -22,7 +23,9 @@ export async function GET(
         { status: 404 },
       );
     }
-    return NextResponse.json(data);
+    return NextResponse.json(
+      explainableSearchResponse(data as Record<string, unknown>),
+    );
   } catch (error) {
     return failure(error);
   }

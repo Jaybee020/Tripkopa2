@@ -176,6 +176,62 @@ export const FlightSearchInput = z.preprocess((value) => {
   ticket_type: z.enum(["refundable", "nonrefundable", "any"]).default("any"),
 }));
 export type FlightSearchInput = z.infer<typeof FlightSearchInput>;
+
+const FlightDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
+  message: "Dates must use YYYY-MM-DD",
+}).refine((value) => {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}, { message: "Date is invalid" });
+
+const LocationCode = z.string().trim().transform((value) => value.toUpperCase())
+  .pipe(z.string().regex(/^[A-Z]{3}$/, {
+    message: "Airport and city codes must be three-letter IATA codes",
+  }));
+
+export const FlexibleDateFlightSearchInput = z.preprocess((value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const input = value as Record<string, unknown>;
+  return {
+    ...input,
+    origin_codes: input.origin_codes ?? input.origin_airports,
+    destination: input.destination ?? input.destination_code,
+  };
+}, z.object({
+  origin_codes: z.array(LocationCode).min(1).max(5)
+    .transform((airports) => [...new Set(airports)]),
+  destination: LocationCode,
+  departure_date: FlightDate,
+  return_date: FlightDate,
+  window_days: z.coerce.number().int().min(0).max(7).default(7),
+  preserve_trip_length: BooleanInput.default(true),
+  direct: BooleanInput.default(false),
+  adult_count: PositiveInt.default(1),
+  children_count: NonnegativeInt.default(0),
+  infant_count: NonnegativeInt.default(0),
+  cabin_class: z.string().trim().min(1).default("Economy"),
+  all_providers: BooleanInput.default(true),
+  ticket_type: z.enum(["refundable", "nonrefundable", "any"]).default("any"),
+}).superRefine((value, context) => {
+  if (value.return_date <= value.departure_date) {
+    context.addIssue({
+      code: "custom",
+      path: ["return_date"],
+      message: "Return date must be after departure date",
+    });
+  }
+  if (value.origin_codes.includes(value.destination)) {
+    context.addIssue({
+      code: "custom",
+      path: ["destination"],
+      message: "Destination must differ from every origin airport or city code",
+    });
+  }
+}));
+export type FlexibleDateFlightSearchInput = z.infer<
+  typeof FlexibleDateFlightSearchInput
+>;
+
 export const FlightSearch = z
   .object({
     id: Id,

@@ -63,6 +63,37 @@ export function itineraryFingerprint(offer: unknown) {
   return JSON.stringify(segments);
 }
 
+export function itineraryEndpoints(offer: unknown) {
+  const routes = findRouteContainer(offer);
+  if (!routes) return null;
+  const outgoing = Array.isArray(routes.outgoingRoutes)
+    ? routes.outgoingRoutes.map(normalizeSegment).filter((item): item is Segment => Boolean(item))
+    : [];
+  const returning = Array.isArray(routes.returnRoutes)
+    ? routes.returnRoutes.map(normalizeSegment).filter((item): item is Segment => Boolean(item))
+    : [];
+  if (!outgoing.length) return null;
+  return {
+    origin: outgoing[0].from,
+    destination: outgoing.at(-1)!.to,
+    departure_date: outgoing[0].departure.slice(0, 10),
+    return_date: returning[0]?.departure.slice(0, 10) ?? null,
+  };
+}
+
+export function itineraryIsDirect(offer: unknown) {
+  const routes = findRouteContainer(offer);
+  if (!routes) return null;
+  const outgoing = Array.isArray(routes.outgoingRoutes) ? routes.outgoingRoutes : [];
+  const returning = Array.isArray(routes.returnRoutes) ? routes.returnRoutes : [];
+  if (!outgoing.length) return null;
+  const legs = returning.length ? [outgoing, returning] : [outgoing];
+  return legs.every((segments) => (
+    segments.length === 1
+    && Number(record(segments[0])?.numberOfStops ?? 0) === 0
+  ));
+}
+
 export function findEquivalentOffer(original: unknown, offers: unknown[]) {
   const originalFingerprint = itineraryFingerprint(original);
   if (!originalFingerprint) return null;

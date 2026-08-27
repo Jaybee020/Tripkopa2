@@ -11,6 +11,7 @@ import {
 import { loadFinancingRules } from "@/lib/financing-rules";
 import { refreshCustomerTrustTier } from "@/lib/trust-financing";
 import { normalizeFareRules } from "@/lib/ticket-rules";
+import { offerSearchMetadata } from "@/lib/flight-search-scope";
 
 export function resultShape(value: unknown) {
   if (Array.isArray(value)) return { type: "array", length: value.length };
@@ -77,8 +78,25 @@ export async function prepareQuote(input: {
     });
   }
 
+  const selectedOfferId = getOfferId(offer);
+  const selectedOfferIndex = quote.offer_index !== undefined && quote.offer === undefined
+    ? quote.offer_index
+    : listOffers(search.results).findIndex(
+        (candidate) => getOfferId(candidate) === selectedOfferId,
+      );
+  const storedOfferIndex = selectedOfferIndex >= 0
+    ? selectedOfferIndex
+    : quote.offer_index ?? 0;
+  const selectedSearchScope = offerSearchMetadata(search.results, storedOfferIndex) ?? {
+    origin: search.origin,
+    destination: search.destination,
+    departure_date: search.departure_date,
+    return_date: search.return_date,
+    ngn_total: null,
+  };
   const baseAmount =
     quote.base_amount ??
+    selectedSearchScope.ngn_total ??
     extractOfferAmount(offer) ??
     extractOfferAmount(search.results);
   if (!baseAmount) {
@@ -90,25 +108,23 @@ export async function prepareQuote(input: {
     });
   }
 
-  const currency = extractOfferCurrency(offer, quote.currency);
-  const selectedOfferId = getOfferId(offer);
-  const selectedOfferIndex = listOffers(search.results).findIndex(
-    (candidate) => getOfferId(candidate) === selectedOfferId,
-  );
+  const currency = selectedSearchScope.ngn_total
+    ? "NGN"
+    : extractOfferCurrency(offer, quote.currency);
   const rules = await loadFinancingRules(supabase);
   const trust = quote.booking_type === "flexible"
     ? await refreshCustomerTrustTier(supabase, customerId)
     : null;
   const pricing = priceQuote({
-    origin: search.origin,
-    destination: search.destination,
-    departureDate: search.departure_date,
+    origin: selectedSearchScope.origin,
+    destination: selectedSearchScope.destination,
+    departureDate: selectedSearchScope.departure_date,
     baseAmount,
     currency,
     bookingType: quote.booking_type,
     installmentCount: quote.installment_count,
     repaymentPlanRequest: quote.repayment_plan_request,
-    travelCompletionDate: search.return_date || search.departure_date,
+    travelCompletionDate: selectedSearchScope.return_date || selectedSearchScope.departure_date,
     trustTier: trust?.effective_tier,
     rules,
   });
@@ -119,6 +135,7 @@ export async function prepareQuote(input: {
     currency,
     selectedOfferId,
     selectedOfferIndex,
+    selectedSearchScope,
     rules,
     pricing,
     fareRules: normalizeFareRules(offer),

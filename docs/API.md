@@ -117,6 +117,7 @@ Many records come directly from Postgres. Decimal amount fields may therefore be
 | `POST` | `/api/kyc/sessions/{session_id}/consent` | KYC | Record privacy consent |
 | `POST` | `/api/kyc/sessions/{session_id}/verify-bvn` | KYC | Verify BVN and provision a virtual account |
 | `POST` | `/api/flights/searches` | Agent | Search for flights and store the result |
+| `POST` | `/api/flights/searches/flexible-dates` | Agent | Search and rank a flexible date window server-side |
 | `GET` | `/api/flights/searches/{search_id}` | Agent | Read a stored flight search |
 | `POST` | `/api/quotes` | Agent | Create a full or flexible quote from a stored search offer |
 | `GET` | `/api/quotes/{quote_id}` | Agent | Read a customer quote |
@@ -373,8 +374,8 @@ Rules and defaults:
 
 | Field | Required | Rule/default |
 |---|---|---|
-| `origin` | Yes | At least 3 characters |
-| `destination` | Yes | At least 3 characters |
+| `origin` | Yes | Airport or metropolitan city IATA code, such as `LHR` or `LON` |
+| `destination` | Yes | Airport or metropolitan city IATA code, such as `LOS` or `LON` |
 | `departure_date` | Yes | String passed to the flight provider |
 | `return_date` | No | String or `null` |
 | `trip_type` | No | `one_way` (default) or `return` |
@@ -395,6 +396,54 @@ from=LOS&to=LON&departureDate=2026-12-24&returnDate=&direct=false&adult=1&childr
 ```
 
 Returns `201` with a stored search record whose `results` field contains the provider response. The caller should let the customer choose one offer from this response, then create a quote.
+
+Every search response also returns `requested_scope`, `completed_scope`,
+`price_scope: "party_total"`, `traveller_summary`,
+`date_combinations_searched`, and `is_complete`. These fields are persisted in
+`results.search_metadata` and promoted to the top level on create and read.
+
+### Search flexible dates
+
+Expose this endpoint to the agent as `tripkopaSearchFlexibleDates`:
+
+```http
+POST /api/flights/searches/flexible-dates
+```
+
+```json
+{
+  "origin_codes": ["LON"],
+  "destination": "LOS",
+  "departure_date": "2026-12-29",
+  "return_date": "2027-02-18",
+  "window_days": 7,
+  "preserve_trip_length": true,
+  "direct": true,
+  "adult_count": 3,
+  "children_count": 2,
+  "cabin_class": "Economy"
+}
+```
+
+`origin_codes` and `destination` accept either specific airport IATA codes
+(`LHR`) or metropolitan city IATA codes (`LON`). The older `origin_airports`
+field remains accepted as an alias for `origin_codes`.
+
+The backend generates every candidate date pair and performs the provider calls
+with bounded concurrency. Preserved trip length produces 15 date pairs for a
+seven-day window. Independent date variation can produce up to 225 pairs. A
+request may contain at most 225 provider searches across all origin airports;
+reduce the date window or airport list when the combined scope exceeds that cap.
+Identical itineraries are deduplicated, only offers with a provable complete NGN
+fare are ranked, and the cheapest five are stored in `results.details`.
+`results.offer_metadata` identifies each offer's actual operating airports,
+searched city/airport codes, dates, NGN party total, and stable zero-based
+`offer_index`. It also explicitly labels the trip as return and the itinerary
+as direct or connecting.
+
+If one or more provider calls fail, the stored search has `status: "PARTIAL"`
+and `is_complete: false`; `completed_scope` states exactly which date pairs
+finished. Partial results must not be presented as a completed comparison.
 
 ### Create a quote
 

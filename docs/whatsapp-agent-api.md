@@ -219,6 +219,10 @@ Returns the KYC session if it belongs to the asserted WhatsApp customer.
 
 Calls the TakeTrips provider and stores the search result.
 
+`origin` and `destination` may be specific airport IATA codes (`LHR`) or
+metropolitan city IATA codes (`LON`). Use a city code when the customer is open
+to any airport serving that city; preserve a specifically confirmed airport.
+
 ```http
 POST /api/flights/searches
 ```
@@ -284,6 +288,63 @@ Response includes the stored search row and provider results:
   "results": {}
 }
 ```
+
+### Search Flexible Dates
+
+Register this endpoint as the `tripkopaSearchFlexibleDates` agent tool. One call
+searches the complete date window, deduplicates identical itineraries, ranks by
+complete NGN party fare, and stores the best five offers.
+
+```http
+POST /api/flights/searches/flexible-dates
+```
+
+```json
+{
+  "origin_codes": ["LON"],
+  "destination": "LOS",
+  "departure_date": "2026-12-29",
+  "return_date": "2027-02-18",
+  "window_days": 7,
+  "preserve_trip_length": true,
+  "direct": true,
+  "adult_count": 3,
+  "children_count": 2,
+  "cabin_class": "Economy"
+}
+```
+
+`origin_codes` and `destination` accept either specific airport IATA codes such
+as `LHR` or metropolitan city IATA codes such as `LON`. The legacy
+`origin_airports` field is also accepted. Ranked `offer_metadata` always reports
+the actual operating airports returned by the itinerary as well as the searched
+codes, dates, return-trip status, and whether the itinerary is direct.
+
+With `preserve_trip_length: true`, a seven-day window searches 15 date pairs,
+from seven days before through seven days after the requested dates. With it
+set to `false`, departure and return dates vary independently. The backend
+limits execution concurrency; the agent must not call the exact-date tool for
+the individual combinations. The combined scope is capped at 225 provider
+searches across all origin airports.
+
+The stored search response includes the ranked raw offers in `results.details`
+and their explainable fields in `results.offer_metadata`. Scope fields are also
+returned at the response top level:
+
+```json
+{
+  "requested_scope": {},
+  "completed_scope": {},
+  "price_scope": "party_total",
+  "traveller_summary": "3 adults and 2 children",
+  "date_combinations_searched": 15,
+  "is_complete": true
+}
+```
+
+`is_complete` is false when any requested provider search fails. In that case,
+`completed_scope` reports the successfully completed date combinations and the
+agent must not present the partial ranking as the completed comparison.
 
 ### Get Flight Search
 

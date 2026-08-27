@@ -20,6 +20,7 @@ export async function POST(request: Request) {
       currency,
       selectedOfferId,
       selectedOfferIndex,
+      selectedSearchScope,
       rules,
       pricing,
       fareRules,
@@ -52,10 +53,10 @@ export async function POST(request: Request) {
             ? selectedOfferIndex
             : input.offer_index ?? 0,
           search: {
-            origin: search.origin,
-            destination: search.destination,
-            departure_date: search.departure_date,
-            return_date: search.return_date,
+            origin: selectedSearchScope.origin,
+            destination: selectedSearchScope.destination,
+            departure_date: selectedSearchScope.departure_date,
+            return_date: selectedSearchScope.return_date,
             trip_type: search.trip_type,
             passenger_count: search.passenger_count,
             adult_count: search.adult_count,

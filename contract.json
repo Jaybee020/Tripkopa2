@@ -138,6 +138,15 @@
       "handler_file": "app/api/flights/searches/route.ts"
     },
     {
+      "method": "POST",
+      "path": "/api/flights/searches/flexible-dates",
+      "purpose": "Search a flexible date window server-side, deduplicate itineraries, and return the five cheapest complete NGN party fares.",
+      "auth": "agent_api_key_and_whatsapp_identity",
+      "request_schema_name": "FlexibleDateFlightSearchInput",
+      "response_schema_name": "FlightSearch",
+      "handler_file": "app/api/flights/searches/flexible-dates/route.ts"
+    },
+    {
       "method": "GET",
       "path": "/api/flights/searches/[search_id]",
       "purpose": "",

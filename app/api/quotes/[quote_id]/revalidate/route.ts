@@ -96,10 +96,13 @@ export async function POST(
       .single();
     if (storedSearchError) throw storedSearchError;
     const savedOfferId = details.selected_offer_id ?? getOfferId(details.offer);
+    const hasSavedOfferIndex = typeof details.selected_offer_index === "number";
     const canonicalOffer = selectOffer(
       storedSearch.results,
       details.selected_offer_index,
-      savedOfferId ? { id: savedOfferId } : details.offer,
+      hasSavedOfferIndex
+        ? undefined
+        : savedOfferId ? { id: savedOfferId } : details.offer,
     );
     if (!canonicalOffer) {
       const recovered = await recoverProviderQuote({
