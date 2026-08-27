@@ -228,7 +228,7 @@ Otherwise, `session` contains `status`, `provider`, `expires_at`, and `normalize
 
 ## KYC workflow
 
-The expected sequence is create session → open returned link → exchange token → consent → verify BVN. Complete the customer's full legal first, middle, and last names and email before BVN verification. After verification and wallet provisioning succeed, the backend sends an idempotent KYC-success notification through every channel in `KYC_SUCCESS_NOTIFICATION_CHANNELS`. The message never contains the customer's BVN. A later KYC-status read retries any failed channel. Its response includes `success_notification`, with the configured channels and each channel's independent delivery state.
+The expected sequence is create session → open returned link → exchange token → consent → verify BVN. Complete the customer's full legal first, middle, and last names and email before BVN verification. After verification and wallet provisioning succeed, the API returns without waiting for outbound notification delivery. The success page offers a WhatsApp return button and redirects after four seconds when `NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER` is configured. The prefilled message tells the agent to continue the preserved booking flow. KYC-success notifications are delivered afterward through every channel in `KYC_SUCCESS_NOTIFICATION_CHANNELS`; a later KYC-status read retries failed channels.
 
 ### 1. Create a KYC session
 

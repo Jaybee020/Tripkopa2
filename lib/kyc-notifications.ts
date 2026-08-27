@@ -42,6 +42,7 @@ export async function sendKycSuccessNotifications(
     "",
     "Your Tripkopa identity verification has been completed successfully.",
     "Your dedicated Tripkopa wallet account is now ready for eligible bookings and payments.",
+    "Reply CONTINUE to resume your booking and repayment plan.",
     "",
     "For your security, Tripkopa will never include your BVN in a message or ask you to reply with it.",
     "",
@@ -65,6 +66,7 @@ export async function sendKycSuccessNotifications(
           <p>Hello ${escapeHtml(name)},</p>
           <p>Your Tripkopa identity verification has been completed successfully.</p>
           <p>Your dedicated Tripkopa wallet account is now ready for eligible bookings and payments.</p>
+          <p><strong>Reply CONTINUE in your Tripkopa WhatsApp chat to resume your booking and repayment plan.</strong></p>
           <p style="color:#5f6b76">For your security, Tripkopa will never include your BVN in a message or ask you to reply with it.</p>
           <p>Tripkopa</p>
         </div>

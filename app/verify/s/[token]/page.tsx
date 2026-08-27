@@ -54,6 +54,13 @@ export default function KycVerificationPage({
     null,
   );
   const [showPrivacyNotice, setShowPrivacyNotice] = useState(false);
+  const whatsappBusinessNumber =
+    process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER?.replace(/\D/g, "") || "";
+  const whatsappReturnUrl = /^\d{8,15}$/.test(whatsappBusinessNumber)
+    ? `https://wa.me/${whatsappBusinessNumber}?text=${encodeURIComponent(
+        "Hi Tripkopa, I have completed identity verification. Please continue my booking.",
+      )}`
+    : null;
 
   useEffect(() => {
     let active = true;
@@ -114,6 +121,14 @@ export default function KycVerificationPage({
       active = false;
     };
   }, [params]);
+
+  useEffect(() => {
+    if (state !== "verified" || !whatsappReturnUrl) return;
+    const redirect = window.setTimeout(() => {
+      window.location.assign(whatsappReturnUrl);
+    }, 4000);
+    return () => window.clearTimeout(redirect);
+  }, [state, whatsappReturnUrl]);
 
   const startVerification = async () => {
     const normalizedFirstName = firstName.trim();
@@ -506,9 +521,20 @@ export default function KycVerificationPage({
                 </h2>
                 <p>
                   {state === "verified"
-                    ? "Your status is ready to be shared securely with Tripkopa."
+                    ? "Your verification is complete. Return to your Tripkopa chat to continue your booking and repayment plan."
                     : "Please request a new verification link through the Tripkopa WhatsApp conversation."}
                 </p>
+                {state === "verified" && whatsappReturnUrl && (
+                  <>
+                    <a className="kyc-primary-button" href={whatsappReturnUrl}>
+                      Return to WhatsApp <ExternalLink size={16} />
+                    </a>
+                    <small>You’ll be redirected automatically in a few seconds.</small>
+                  </>
+                )}
+                {state === "verified" && !whatsappReturnUrl && (
+                  <small>Return to your Tripkopa WhatsApp conversation and send “continue”.</small>
+                )}
               </div>
             )}
           </div>
@@ -518,7 +544,11 @@ export default function KycVerificationPage({
       <footer className="kyc-footer">
         <span>© 2026 Tripkopa</span>
         <span>Privacy by design</span>
-        <span>Need help? Return to WhatsApp</span>
+        {whatsappReturnUrl ? (
+          <a href={whatsappReturnUrl}>Need help? Return to WhatsApp</a>
+        ) : (
+          <span>Need help? Return to WhatsApp</span>
+        )}
       </footer>
     </main>
   );

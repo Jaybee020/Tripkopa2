@@ -171,7 +171,7 @@ Response:
 Possible statuses include `NOT_STARTED`, `PENDING`, `CONSENTED`, `VERIFIED`,
 and provider-specific failure/review states.
 
-When BVN verification and wallet provisioning complete successfully, the backend automatically sends a KYC confirmation through the configured notification channels. Each channel is idempotent and the message never contains the BVN. A KYC-status read returns `success_notification` and retries only failed channel deliveries.
+When BVN verification and wallet provisioning complete successfully, the verification response is not blocked by outbound notification delivery. The success page returns the customer to WhatsApp with a prefilled continuation message when `NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER` is configured. The backend also sends a KYC confirmation through the configured notification channels. Each channel is idempotent and the message never contains the BVN. A KYC-status read returns `success_notification` and retries only failed channel deliveries.
 
 ### Create KYC Session
 

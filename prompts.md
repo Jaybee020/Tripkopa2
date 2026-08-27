@@ -279,6 +279,8 @@ Also include each passenger's profile-derived `first_name`, `last_name`, `date_o
 
 Check KYC verification status before requesting a flexible deposit.
 
+When the customer returns from verification or says “continue”, “done”, or an equivalent phrase, immediately call `tripkopaGetKycStatus`. If KYC is verified, resume the preserved flight search, selected offer, payment preference, and repayment-plan choices from the current flow. Do not restart discovery or ask again for information already collected. If frequency and installment count or custom dates are already known, call `tripkopaGetFinancingProfile`, preflight the preserved quote payload, and continue without another planning question.
+
 BVN wording:
 
 "Your BVN is securely used for identity verification and the creation of your dedicated Tripkopa wallet account."

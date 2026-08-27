@@ -30,6 +30,8 @@ SUPABASE_SERVICE_ROLE_KEY=...
 WHATSAPP_AGENT_API_SECRET=use-a-long-random-secret
 WHATSAPP_ACCESS_TOKEN=meta-cloud-api-access-token
 WHATSAPP_PHONE_NUMBER_ID=meta-business-phone-number-id
+# Public business number used for the post-KYC return-to-chat link.
+NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER=2348012345678
 # Optional; defaults to v24.0.
 WHATSAPP_API_VERSION=v24.0
 # Optional fallback recipient for one-off service tests; production calls pass `to` dynamically.

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireKycSessionAccess } from "@/lib/auth/kyc";
 import { qoreid } from "@/lib/services/qoreid";
@@ -276,17 +276,19 @@ export async function POST(
         logBvnError("mark_existing_account_kyc_verified", kycError, context);
         throw kycError;
       }
-      try {
-        await sendKycSuccessNotifications(supabase, session_id, {
-          id: customer.id,
-          email: profile.email,
-          whatsapp_number: completeProfile.whatsapp_number,
-          first_name: profile.first_name,
-          last_name: profile.last_name,
-        });
-      } catch (notificationError) {
-        logBvnError("send_kyc_success_notifications", notificationError, context);
-      }
+      after(async () => {
+        try {
+          await sendKycSuccessNotifications(supabase, session_id, {
+            id: customer.id,
+            email: profile.email,
+            whatsapp_number: completeProfile.whatsapp_number,
+            first_name: profile.first_name,
+            last_name: profile.last_name,
+          });
+        } catch (notificationError) {
+          logBvnError("send_kyc_success_notifications", notificationError, context);
+        }
+      });
       return NextResponse.json({ status: "success", virtual_account: existing });
     }
     if (existing?.status === "PROVISIONING") {
@@ -385,17 +387,19 @@ export async function POST(
         throw kycError;
       }
 
-      try {
-        await sendKycSuccessNotifications(supabase, session_id, {
-          id: customer.id,
-          email: profile.email,
-          whatsapp_number: completeProfile.whatsapp_number,
-          first_name: profile.first_name,
-          last_name: profile.last_name,
-        });
-      } catch (notificationError) {
-        logBvnError("send_kyc_success_notifications", notificationError, context);
-      }
+      after(async () => {
+        try {
+          await sendKycSuccessNotifications(supabase, session_id, {
+            id: customer.id,
+            email: profile.email,
+            whatsapp_number: completeProfile.whatsapp_number,
+            first_name: profile.first_name,
+            last_name: profile.last_name,
+          });
+        } catch (notificationError) {
+          logBvnError("send_kyc_success_notifications", notificationError, context);
+        }
+      });
 
       return NextResponse.json(
         { status: "success", virtual_account: saved },
