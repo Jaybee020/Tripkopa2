@@ -429,6 +429,8 @@ POST /api/flights/searches/flexible-dates
 `origin_codes` and `destination` accept either specific airport IATA codes
 (`LHR`) or metropolitan city IATA codes (`LON`). The older `origin_airports`
 field remains accepted as an alias for `origin_codes`.
+`return_date` may be omitted, `null`, or an empty string for a one-way search.
+When supplied, it must use `YYYY-MM-DD` and be after `departure_date`.
 
 The backend generates every candidate date pair and performs the provider calls
 with bounded concurrency. Preserved trip length produces 15 date pairs for a
@@ -439,7 +441,7 @@ Identical itineraries are deduplicated, only offers with a provable complete NGN
 fare are ranked, and the cheapest five are stored in `results.details`.
 `results.offer_metadata` identifies each offer's actual operating airports,
 searched city/airport codes, dates, NGN party total, and stable zero-based
-`offer_index`. It also explicitly labels the trip as return and the itinerary
+`offer_index`. It also explicitly labels the trip as one-way or return and the itinerary
 as direct or connecting.
 
 If one or more provider calls fail, the stored search has `status: "PARTIAL"`

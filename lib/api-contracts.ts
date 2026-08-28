@@ -192,17 +192,22 @@ const LocationCode = z.string().trim().transform((value) => value.toUpperCase())
 export const FlexibleDateFlightSearchInput = z.preprocess((value) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const input = value as Record<string, unknown>;
+  const rawReturnDate = input.return_date ?? input.returnDate;
   return {
     ...input,
     origin_codes: input.origin_codes ?? input.origin_airports,
     destination: input.destination ?? input.destination_code,
+    return_date:
+      typeof rawReturnDate === "string" && rawReturnDate.trim() === ""
+        ? null
+        : rawReturnDate ?? null,
   };
 }, z.object({
   origin_codes: z.array(LocationCode).min(1).max(5)
     .transform((airports) => [...new Set(airports)]),
   destination: LocationCode,
   departure_date: FlightDate,
-  return_date: FlightDate,
+  return_date: FlightDate.nullable().default(null),
   window_days: z.coerce.number().int().min(0).max(7).default(7),
   preserve_trip_length: BooleanInput.default(true),
   direct: BooleanInput.default(false),
@@ -213,7 +218,7 @@ export const FlexibleDateFlightSearchInput = z.preprocess((value) => {
   all_providers: BooleanInput.default(true),
   ticket_type: z.enum(["refundable", "nonrefundable", "any"]).default("any"),
 }).superRefine((value, context) => {
-  if (value.return_date <= value.departure_date) {
+  if (value.return_date && value.return_date <= value.departure_date) {
     context.addIssue({
       code: "custom",
       path: ["return_date"],

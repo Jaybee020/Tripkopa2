@@ -7,7 +7,7 @@ import {
 
 export type DateCombination = {
   departure_date: string;
-  return_date: string;
+  return_date: string | null;
 };
 
 export type OfferSearchMetadata = DateCombination & {
@@ -17,8 +17,8 @@ export type OfferSearchMetadata = DateCombination & {
   searched_origin_code: string;
   searched_destination_code: string;
   searched_departure_date: string;
-  searched_return_date: string;
-  trip_type: "return";
+  searched_return_date: string | null;
+  trip_type: "one_way" | "return";
   direct: boolean;
   ngn_total: number;
   currency: "NGN";
@@ -113,7 +113,7 @@ function addUtcDays(date: string, days: number) {
 
 export function buildDateCombinations(input: {
   departure_date: string;
-  return_date: string;
+  return_date: string | null;
   window_days: number;
   preserve_trip_length: boolean;
 }): DateCombination[] {
@@ -121,16 +121,23 @@ export function buildDateCombinations(input: {
     { length: input.window_days * 2 + 1 },
     (_, index) => index - input.window_days,
   );
+  if (!input.return_date) {
+    return offsets.map((offset) => ({
+      departure_date: addUtcDays(input.departure_date, offset),
+      return_date: null,
+    }));
+  }
+  const returnDate = input.return_date;
   if (input.preserve_trip_length) {
     return offsets.map((offset) => ({
       departure_date: addUtcDays(input.departure_date, offset),
-      return_date: addUtcDays(input.return_date, offset),
+      return_date: addUtcDays(returnDate, offset),
     }));
   }
 
   return offsets.flatMap((departureOffset) => offsets.map((returnOffset) => ({
     departure_date: addUtcDays(input.departure_date, departureOffset),
-    return_date: addUtcDays(input.return_date, returnOffset),
+    return_date: addUtcDays(returnDate, returnOffset),
   }))).filter((combination) => combination.return_date > combination.departure_date);
 }
 
@@ -170,7 +177,7 @@ export function rankFlexibleOffers(searches: Array<{
   origin: string;
   destination: string;
   departure_date: string;
-  return_date: string;
+  return_date: string | null;
   direct: boolean;
   provider_result: Record<string, unknown>;
 }>, limit = 5) {
@@ -194,7 +201,7 @@ export function rankFlexibleOffers(searches: Array<{
         return_date: endpoints?.return_date ?? search.return_date,
         searched_departure_date: search.departure_date,
         searched_return_date: search.return_date,
-        trip_type: "return" as const,
+        trip_type: search.return_date ? "return" as const : "one_way" as const,
         direct: itineraryIsDirect(offer) ?? search.direct,
       };
       const key = deduplicationKey(offer, scope);
@@ -248,7 +255,7 @@ export function offerSearchMetadata(results: unknown, offerIndex: number) {
     ? metadata.return_date
     : null;
   const ngnTotal = positiveNumber(metadata.ngn_total);
-  if (!origin || !destination || !departureDate || !returnDate) return null;
+  if (!origin || !destination || !departureDate) return null;
   return {
     origin,
     destination,

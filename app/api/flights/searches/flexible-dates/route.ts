@@ -20,7 +20,7 @@ type SearchTask = {
   origin: string;
   destination: string;
   departure_date: string;
-  return_date: string;
+  return_date: string | null;
 };
 
 async function mapWithConcurrency<T, R>(
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         from: task.origin,
         to: task.destination,
         departureDate: task.departure_date,
-        returnDate: task.return_date,
+        returnDate: task.return_date ?? undefined,
         direct: input.direct,
         adult: input.adult_count,
         children: input.children_count,
@@ -145,7 +145,7 @@ export async function POST(request: Request) {
         destination: input.destination,
         departure_date: input.departure_date,
         return_date: input.return_date,
-        trip_type: "return",
+        trip_type: input.return_date ? "return" : "one_way",
         passenger_count: passengerCount,
         adult_count: input.adult_count,
         children_count: input.children_count,

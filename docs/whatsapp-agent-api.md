@@ -318,7 +318,9 @@ POST /api/flights/searches/flexible-dates
 as `LHR` or metropolitan city IATA codes such as `LON`. The legacy
 `origin_airports` field is also accepted. Ranked `offer_metadata` always reports
 the actual operating airports returned by the itinerary as well as the searched
-codes, dates, return-trip status, and whether the itinerary is direct.
+codes, dates, trip type, and whether the itinerary is direct. `return_date` may
+be omitted, `null`, or an empty string for a one-way search; a supplied value
+must use `YYYY-MM-DD` and be after `departure_date`.
 
 With `preserve_trip_length: true`, a seven-day window searches 15 date pairs,
 from seven days before through seven days after the requested dates. With it
