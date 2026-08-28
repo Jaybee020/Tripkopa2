@@ -435,6 +435,7 @@ export const FinancingProfile = z.object({
   schedule_constraints: z.object({
     max_installments: z.record(z.string(), z.number().int().positive()),
     max_financing_weeks: z.record(z.string(), z.number().positive()),
+    minimum_days_before_departure: z.number().int().min(21),
     generated_due_days_before_departure: z.number().int().positive(),
     repayment_due_days_before_departure: z.number().int().positive(),
     grace_period_days: z.number().int().nonnegative(),

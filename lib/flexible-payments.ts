@@ -178,9 +178,23 @@ function generatedDates(
       : addMonths(finalDate, -offset);
   });
   if (dates.some((date) => date.getTime() <= afterDate.getTime())) {
+    let maximumInstallments = 0;
+    let candidate = new Date(finalDate);
+    while (candidate.getTime() > afterDate.getTime() && maximumInstallments < 24) {
+      maximumInstallments += 1;
+      candidate = frequency === "weekly"
+        ? addDays(candidate, -7)
+        : addMonths(candidate, -1);
+    }
     throw Object.assign(
       new Error("The requested installment count does not fit before the repayment deadline"),
-      { status: 422, code: "INSTALLMENT_COUNT_INFEASIBLE" },
+      {
+        status: 422,
+        code: "INSTALLMENT_COUNT_INFEASIBLE",
+        requested_installments: count,
+        maximum_installments: maximumInstallments,
+        repayment_deadline: isoDate(finalDate),
+      },
     );
   }
   return dates;
@@ -220,6 +234,27 @@ export function priceQuote(input: QuotePricingInput): QuotePricing {
 
   const category = classifyRoute(input.origin, input.destination);
   const tier = input.trustTier ?? "OBSERVER";
+  const departure = utcDate(input.departureDate);
+  const today = utcDate(isoDate(new Date()));
+  const daysUntilDeparture = Math.floor(
+    (departure.getTime() - today.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  if (daysUntilDeparture < rules.minimum_days_before_departure) {
+    throw Object.assign(
+      new Error(
+        `Flexible payment is available only when departure is at least ${rules.minimum_days_before_departure} days away`,
+      ),
+      {
+        status: 422,
+        code: "FLEXIBLE_PAYMENT_TOO_CLOSE_TO_DEPARTURE",
+        days_until_departure: daysUntilDeparture,
+        minimum_days_before_departure: rules.minimum_days_before_departure,
+        earliest_eligible_departure_date: isoDate(
+          addDays(today, rules.minimum_days_before_departure),
+        ),
+      },
+    );
+  }
   const weeks = weeksUntil(input.departureDate);
   const rate = markupRate(rules, category, weeks);
   const total = roundMoney(input.baseAmount * (1 + rate));
@@ -233,8 +268,6 @@ export function priceQuote(input: QuotePricingInput): QuotePricing {
   const depositRate = rules.deposit_rates[tier][category];
   const deposit = roundMoney(total * depositRate);
   const remaining = roundMoney(total - deposit);
-  const departure = utcDate(input.departureDate);
-  const today = utcDate(isoDate(new Date()));
   const repaymentDeadline = addDays(departure, -rules.repayment_due_days_before_departure);
   const generatedDeadline = addDays(departure, -rules.generated_due_days_before_departure);
   const graceHardStop = addDays(departure, -rules.grace_hard_stop_days_before_departure);
@@ -340,7 +373,16 @@ export function priceQuote(input: QuotePricingInput): QuotePricing {
       const phase = item.phase ?? "PRE_TRAVEL";
       const date = utcDate(item.due_date);
       if (phase === "PRE_TRAVEL" && date > repaymentDeadline) {
-        throw Object.assign(new Error("Pre-travel repayments must finish at least 10 days before departure"), { status: 422 });
+        throw Object.assign(
+          new Error(
+            `Pre-travel repayments must finish at least ${rules.repayment_due_days_before_departure} days before departure`,
+          ),
+          {
+            status: 422,
+            code: "REPAYMENT_DEADLINE_EXCEEDED",
+            repayment_deadline: isoDate(repaymentDeadline),
+          },
+        );
       }
       if (phase === "POST_TRAVEL" && (date <= travelCompletion || date > postTravelDeadline)) {
         throw Object.assign(new Error("Post-travel repayments must be after travel and within 90 days"), { status: 422 });

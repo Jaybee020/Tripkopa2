@@ -457,7 +457,7 @@ Before creating a quote, call the preflight endpoint with the identical body:
 POST /api/quotes/preflight
 ```
 
-Preflight runs the same offer resolution, KYC, trust-tier, route, cap, financing-window, installment, deadline, post-travel, and amount checks as quote creation, but does not insert a quote. Business-rule failures return HTTP `200` so agent runtimes do not terminate the conversation:
+Preflight runs the same offer resolution, KYC, trust-tier, route, cap, financing-window, installment, repayment-deadline, and amount checks as quote creation, but does not insert a quote. It also rejects post-travel rows because the current policy requires complete repayment before travel. Business-rule failures return HTTP `200` so agent runtimes do not terminate the conversation:
 
 ```json
 {
@@ -474,6 +474,24 @@ Preflight runs the same offer resolution, KYC, trust-tier, route, cap, financing
 ```
 
 Only call `POST /api/quotes` after preflight returns `valid: true`, using the exact same request body.
+
+When departure is fewer than 21 calendar days away, preflight returns:
+
+```json
+{
+  "valid": false,
+  "status": "ADJUSTMENT_REQUIRED",
+  "issue": {
+    "code": "FLEXIBLE_PAYMENT_TOO_CLOSE_TO_DEPARTURE",
+    "message": "This trip is too close to departure for a repayment plan. Flexible payment is available for flights departing at least 21 days from today. You can pay in full or choose a later flight.",
+    "minimum_days_before_departure": 21,
+    "earliest_eligible_departure_date": "2026-09-17"
+  }
+}
+```
+
+Agent-facing clients should present `issue.message` naturally and must not
+mention APIs, backend checks, tools, endpoints, or raw error codes to customers.
 
 Creates a full-payment or flexible-payment quote from a stored flight search. Flexible quotes require latest KYC status `VERIFIED`.
 
@@ -515,7 +533,7 @@ Do not send placeholder values for unknown optional fields. Omit `offer` instead
 
 If the provider response uses an unsupported price shape, the endpoint returns `400` with `offer_shape` and `result_shape` metadata. In that case, retry with a positive `base_amount` from the selected offer.
 
-Full-payment quotes apply a 5% service fee. Flexible quotes use the customer's trust tier, route category, financing window, marked-up-total cap, and versioned rules. Generated schedules end 14 days before departure; custom schedules must end at least 10 days before departure. The quote stores the complete plan under `details.pricing.repayment_plan`.
+Full-payment quotes apply a 5% service fee. Flexible quotes require departure at least 21 calendar days away and use the customer's trust tier, route category, financing window, marked-up-total cap, and versioned rules. Generated and custom schedules complete the entire outstanding balance 10 days before departure; post-travel settlement is disabled. The final repayment has at most 3 grace days, ending no later than 7 days before departure. The quote stores the complete plan under `details.pricing.repayment_plan`.
 
 ```json
 {
@@ -526,7 +544,7 @@ Full-payment quotes apply a 5% service fee. Flexible quotes use the customer's t
   "total_amount": "129000",
   "deposit_amount": "45150",
   "installment_amount": "20962.50",
-  "rule_version": "flex_v2_2026_08",
+  "rule_version": "flex_v3_2026_08",
   "expires_at": "2026-08-12T12:10:00.000Z",
   "details": {
     "booking_type": "flexible",
@@ -694,7 +712,7 @@ Channel lists are comma-separated. `KYC_SUCCESS_NOTIFICATION_CHANNELS=EMAIL,WHAT
 GET /api/me/financing
 ```
 
-Returns the computed and effective public tier, successful cycles, lifetime on-time and reminder rates, KYC state, route-specific deposit rates and caps, the maximum post-travel percentage, and the active rule version. Internal risk events and scoring inputs are not returned.
+Returns the computed and effective public tier, successful cycles, lifetime on-time and reminder rates, KYC state, route-specific deposit rates and caps, the post-travel percentage (currently zero), schedule constraints, and the active rule version. Internal risk events and scoring inputs are not returned.
 
 ## Wallet, payments, and events
 
@@ -948,12 +966,13 @@ PUT /api/operations/rules
 ```json
 {
   "value": {
-    "rule_version": "flex_v2_2026_08",
+    "rule_version": "flex_v3_2026_08",
     "full_service_fee_rate": 0.05,
     "max_financing_weeks": {"domestic":12,"regional":16,"international":24},
     "max_installments": {"domestic":4,"regional":6,"international":8},
+    "minimum_days_before_departure": 21,
     "repayment_due_days_before_departure": 10,
-    "generated_due_days_before_departure": 14,
+    "generated_due_days_before_departure": 10,
     "grace_period_days": 3,
     "grace_hard_stop_days_before_departure": 7,
     "post_travel_max_days": 90,

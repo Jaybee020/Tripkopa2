@@ -19,6 +19,7 @@ export type FinancingRules = {
   markup: Record<RouteCategory, Array<[number, number]>>;
   max_financing_weeks: RouteValues;
   max_installments: RouteValues;
+  minimum_days_before_departure: number;
   repayment_due_days_before_departure: number;
   generated_due_days_before_departure: number;
   grace_period_days: number;
@@ -30,7 +31,7 @@ export type FinancingRules = {
 };
 
 export const DEFAULT_FINANCING_RULES: FinancingRules = {
-  rule_version: "flex_v2_2026_08",
+  rule_version: "flex_v3_2026_08",
   full_service_fee_rate: 0.05,
   markup: {
     domestic: [[5, 0.075], [9, 0.1], [12, 0.125]],
@@ -39,8 +40,9 @@ export const DEFAULT_FINANCING_RULES: FinancingRules = {
   },
   max_financing_weeks: { domestic: 12, regional: 16, international: 24 },
   max_installments: { domestic: 4, regional: 6, international: 8 },
+  minimum_days_before_departure: 21,
   repayment_due_days_before_departure: 10,
-  generated_due_days_before_departure: 14,
+  generated_due_days_before_departure: 10,
   grace_period_days: 3,
   grace_hard_stop_days_before_departure: 7,
   post_travel_max_days: 90,
@@ -58,7 +60,7 @@ export const DEFAULT_FINANCING_RULES: FinancingRules = {
     NAVIGATOR: { domestic: 450000, regional: 1400000, international: 2500000 },
     AMBASSADOR: { domestic: 500000, regional: 1500000, international: 3000000 },
   },
-  post_travel_rates: { OBSERVER: 0, EXPLORER: 0, VOYAGER: 0.1, NAVIGATOR: 0.2, AMBASSADOR: 0.3 },
+  post_travel_rates: { OBSERVER: 0, EXPLORER: 0, VOYAGER: 0, NAVIGATOR: 0, AMBASSADOR: 0 },
 };
 
 export function isTrustTier(value: unknown): value is TrustTier {
@@ -72,6 +74,7 @@ function validRules(value: unknown): value is FinancingRules {
     rule.rule_version && typeof rule.full_service_fee_rate === "number" &&
     rule.markup && rule.deposit_rates && rule.financing_caps &&
     rule.max_financing_weeks && rule.max_installments && rule.post_travel_rates &&
+    typeof rule.minimum_days_before_departure === "number" &&
     typeof rule.repayment_due_days_before_departure === "number" &&
     typeof rule.generated_due_days_before_departure === "number" &&
     typeof rule.grace_period_days === "number" &&
@@ -84,11 +87,15 @@ function validRules(value: unknown): value is FinancingRules {
   const positive = (entry: unknown) => typeof entry === "number" && Number.isFinite(entry) && entry > 0;
   if (!positive(typed.full_service_fee_rate) || typed.full_service_fee_rate >= 1) return false;
   if (
+    !positive(typed.minimum_days_before_departure) ||
+    typed.minimum_days_before_departure < 21 ||
     !positive(typed.repayment_due_days_before_departure) ||
     !positive(typed.generated_due_days_before_departure) ||
-    typed.generated_due_days_before_departure < typed.repayment_due_days_before_departure ||
+    typed.generated_due_days_before_departure !== typed.repayment_due_days_before_departure ||
     !positive(typed.grace_period_days) ||
     !positive(typed.grace_hard_stop_days_before_departure) ||
+    typed.grace_hard_stop_days_before_departure !==
+      typed.repayment_due_days_before_departure - typed.grace_period_days ||
     !positive(typed.post_travel_max_days)
   ) return false;
   for (const route of routes) {

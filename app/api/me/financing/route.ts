@@ -27,6 +27,7 @@ export async function GET(request: Request) {
       schedule_constraints: {
         max_installments: rules.max_installments,
         max_financing_weeks: rules.max_financing_weeks,
+        minimum_days_before_departure: rules.minimum_days_before_departure,
         generated_due_days_before_departure: rules.generated_due_days_before_departure,
         repayment_due_days_before_departure: rules.repayment_due_days_before_departure,
         grace_period_days: rules.grace_period_days,

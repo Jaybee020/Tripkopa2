@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { QuoteCreateInput } from "@/lib/api-contracts";
 import { requireAgentCustomer } from "@/lib/auth/agent";
-import { bad, failure } from "@/lib/api-utils";
+import { bad, customerErrorMessage, failure } from "@/lib/api-utils";
 import { addDays, isoDate } from "@/lib/flexible-payments";
 import { prepareQuote } from "@/lib/quote-preparation";
 
@@ -18,6 +18,11 @@ const ISSUE_KEYS = [
   "total_amount",
   "required_amount",
   "scheduled_amount",
+  "requested_installments",
+  "days_until_departure",
+  "minimum_days_before_departure",
+  "earliest_eligible_departure_date",
+  "repayment_deadline",
 ] as const;
 
 function issueFrom(error: unknown) {
@@ -34,7 +39,7 @@ function issueFrom(error: unknown) {
     }
   }
   return {
-    message: value?.message || "The proposed quote is not valid",
+    message: customerErrorMessage(error),
     ...issue,
   };
 }
@@ -56,7 +61,7 @@ export async function POST(request: Request) {
         ? prepared.selectedOfferIndex
         : input.offer_index ?? 0,
       route_category: prepared.pricing.route_category,
-      departure_date: prepared.search.departure_date,
+      departure_date: prepared.selectedSearchScope.departure_date,
       currency: prepared.currency,
       pricing: prepared.pricing,
       rule_version: prepared.rules.rule_version,

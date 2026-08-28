@@ -75,7 +75,14 @@ No request body is required.
     "international": 1700000
   },
   "post_travel_max_percentage": 0,
-  "rule_version": "flex_v2_2026_08"
+  "schedule_constraints": {
+    "minimum_days_before_departure": 21,
+    "repayment_due_days_before_departure": 10,
+    "generated_due_days_before_departure": 10,
+    "grace_period_days": 3,
+    "grace_hard_stop_days_before_departure": 7
+  },
+  "rule_version": "flex_v3_2026_08"
 }
 ```
 
@@ -83,7 +90,9 @@ No request body is required.
 
 - Call this endpoint after KYC and before creating a flexible quote.
 - Use `effective_tier`, not `computed_tier`, for customer eligibility.
-- Treat the returned deposit rates, caps, post-travel allowance, and rule version as authoritative.
+- Treat the returned deposit rates, caps, schedule constraints, and rule version as authoritative. The current post-travel allowance is zero for every tier.
+- Do not offer flexible payment when departure is fewer than 21 calendar days away.
+- Schedule the entire outstanding balance for completion 10 days before departure; the maximum 3-day grace period ends 7 days before departure.
 - Do not manually calculate or promise a final deposit. The quote response is the source of truth for the actual amount.
 - The public tier may be disclosed when useful.
 - Do not disclose repayment-rate metrics, reminder dependency, internal risk events, scoring logic, or rule calculations.
@@ -176,31 +185,14 @@ Monthly example:
 }
 ```
 
-The backend generates ordinary repayments so the final pre-travel repayment is due 14 days before departure.
+Flexible payment is available only when departure is at least 21 calendar days
+away. Generated and custom schedules finish the entire balance 10 days before
+departure. The final repayment then has at most 3 grace days, with a hard stop
+7 days before departure.
 
-### 6.3 Generated plan with post-travel settlement
+### 6.3 Post-travel settlement
 
-Only include `post_travel` when `post_travel_max_percentage` is greater than zero and the customer explicitly accepts post-travel settlement.
-
-```json
-{
-  "search_id": "6ad4adba-6b06-498a-b1c2-8b82e376494f",
-  "booking_type": "flexible",
-  "offer_index": 0,
-  "repayment_plan_request": {
-    "mode": "generated",
-    "frequency": "monthly",
-    "installment_count": 4,
-    "post_travel": {
-      "percentage": 10,
-      "frequency": "monthly",
-      "installment_count": 2
-    }
-  }
-}
-```
-
-The combined pre-travel and post-travel installment count must remain within the route limit. Post-travel repayments must finish within 90 days after travel completion.
+Post-travel settlement is disabled under the current repayment policy. Do not include `post_travel` or `POST_TRAVEL` installment rows. The full outstanding balance must be scheduled before departure.
 
 ### 6.4 Customer-proposed custom plan
 
@@ -253,9 +245,9 @@ The backend validates:
 - unique ascending future dates;
 - route installment limits;
 - financing duration;
+- departure at least 21 calendar days away;
 - completion at least 10 days before departure;
-- trust-tier post-travel eligibility;
-- the 90-day post-travel deadline.
+- every installment is pre-travel.
 
 Custom installment amounts are repayments after the initial deposit. Their sum must therefore equal the backend-priced `total_amount - deposit_amount`, after flexible-payment charges and tier rules have been applied. Do not split the flight-search fare or the final `total_amount` itself.
 

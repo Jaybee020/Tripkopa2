@@ -383,7 +383,7 @@ For generated repayment dates:
 }
 ```
 
-Use `monthly` for calendar-month repayments. For a negotiated plan, send `mode: custom` and an ordered `installments` array containing ISO `due_date` and optional `phase` (`PRE_TRAVEL` or `POST_TRAVEL`). Include a positive `amount` on every row for fixed amounts, or omit it from every row for a backend-calculated equal split of the final post-deposit balance. The backend validates route caps, exact totals, tier eligibility, 10/14-day deadlines, and the 90-day post-travel limit.
+Use `monthly` for calendar-month repayments. For a negotiated plan, send `mode: custom` and an ordered `installments` array containing ISO `due_date`; every row must be `PRE_TRAVEL`. Include a positive `amount` on every row for fixed amounts, or omit it from every row for a service-calculated equal split of the final post-deposit balance. Flexible payment requires departure at least 21 calendar days away. The service validates route caps, exact totals, tier eligibility, the 10-day full-balance completion deadline, and the 3-day grace period ending 7 days before departure. Post-travel settlement is not available.
 
 ### Get Quote
 
