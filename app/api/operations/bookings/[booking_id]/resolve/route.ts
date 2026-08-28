@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Booking } from "@/lib/api-contracts";
-import { requireAuth } from "@/lib/auth/server";
+import { requireOperationsStaff } from "@/lib/auth/operations";
 import { supabase as serviceSupabase } from "@/lib/services/supabase";
 import { bad, failure } from "@/lib/api-utils";
 
@@ -13,17 +13,8 @@ export async function POST(
 ) {
   try {
     const input = ResolveInput.parse(await request.json());
-    const { user, supabase } = await requireAuth();
+    const { user } = await requireOperationsStaff();
     const { booking_id } = await params;
-
-    const { data: staff, error: staffError } = await supabase
-      .from("staff_profiles")
-      .select("role")
-      .eq("user_id", user.id)
-      .in("role", ["operations", "operations_staff", "admin"])
-      .maybeSingle();
-    if (staffError) throw staffError;
-    if (!staff) return NextResponse.json({ error: "Operations staff access required" }, { status: 403 });
 
     const { data: current, error: currentError } = await serviceSupabase.admin
       .from("bookings")

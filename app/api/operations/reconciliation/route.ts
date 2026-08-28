@@ -1,2 +1,18 @@
-import { NextResponse } from "next/server"; import { requireAuth } from "@/lib/auth/server"; import { failure } from "@/lib/api-utils";
-export async function GET(){try{const {supabase}=await requireAuth();const {data,error}=await supabase.from("reconciliation_records").select("*").order("created_at",{ascending:false});if(error)throw error;return NextResponse.json({records:data||[],total:data?.length||0});}catch(e){return failure(e)}}
+import { NextResponse } from "next/server";
+import { requireOperationsStaff } from "@/lib/auth/operations";
+import { failure } from "@/lib/api-utils";
+import { supabase as serviceSupabase } from "@/lib/services/supabase";
+
+export async function GET() {
+  try {
+    await requireOperationsStaff();
+    const { data, error } = await serviceSupabase.admin
+      .from("reconciliation_records")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return NextResponse.json({ records: data || [], total: data?.length || 0 });
+  } catch (error) {
+    return failure(error);
+  }
+}

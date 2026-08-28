@@ -84,3 +84,39 @@ body {
 .ops-mini-list span { color:var(--app-faint); font-size:10px; overflow-wrap:anywhere; }
 @media (max-width:1023px) { .ops-dashboard-grid,.ops-detail-grid { grid-template-columns:1fr; } .ops-rule-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:700px) { .ops-rule-grid { grid-template-columns:1fr; padding-left:16px; padding-right:16px; } .ops-detail-grid { padding-left:18px; padding-right:18px; } .ops-booking-modal { max-height:92vh; } }
+
+.ops-login-page { min-height:100vh; display:grid; place-items:center; padding:24px; background:radial-gradient(circle at top right,#e8edf9 0,transparent 36%),#f4f2ed; color:#18201f; }
+.ops-login-card { width:min(100%,430px); padding:38px; border:1px solid #dedbd3; border-radius:12px; background:#fffefa; box-shadow:0 24px 70px #17211f16; }
+.ops-login-brand { display:flex; align-items:center; gap:10px; margin-bottom:34px; font-size:18px; font-weight:600; letter-spacing:-.04em; }
+.ops-login-icon { width:48px; height:48px; display:grid; place-items:center; margin-bottom:20px; border-radius:10px; color:#3859a8; background:#e9eefb; }
+.ops-login-card h1 { margin:8px 0 10px; font-size:31px; letter-spacing:-.045em; }
+.ops-login-card>p { color:#68736f; font-size:13px; line-height:1.55; }
+.ops-login-form { display:grid; gap:15px; margin-top:27px; }
+.ops-login-form label { display:grid; gap:7px; color:#4f5f59; font-size:11px; }
+.ops-login-form input { min-height:44px; padding:0 12px; border:1px solid #bbc5c0; border-radius:6px; background:#fff; color:#18201f; font-size:14px; outline:none; }
+.ops-login-form input:focus { border-color:#3859a8; box-shadow:0 0 0 3px #e9eefb; }
+.ops-login-form button { min-height:45px; display:flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:6px; background:#3859a8; color:#fff; cursor:pointer; font-size:12px; font-weight:600; }
+.ops-login-form button:disabled { opacity:.6; cursor:wait; }
+.ops-login-form .ops-spinner { border-color:#ffffff66; border-top-color:#fff; }
+.ops-login-error { padding:11px 12px; border:1px solid #efc9c1; border-radius:6px; background:#fff4f1; color:#9d3f32; font-size:11px; line-height:1.45; }
+
+.ops-rule-section { border-top:1px solid var(--app-rule); padding:22px; }
+.ops-rule-section-head { margin-bottom:18px; }
+.ops-rule-section-head h3 { margin:0; font-size:14px; }
+.ops-rule-section-head p { margin-top:6px; color:var(--app-faint); font-size:11px; line-height:1.5; }
+.ops-policy-note { margin-top:2px; padding:12px 14px; border-left:3px solid #3859a8; border-radius:0 5px 5px 0; background:#f3f6fc; color:#4f5f59; font-size:11px; line-height:1.5; }
+.ops-route-rule-grid,.ops-markup-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.ops-route-rule-grid article,.ops-markup-grid article { display:grid; gap:12px; padding:15px; border:1px solid var(--app-rule); border-radius:7px; background:#fbfaf7; }
+.ops-route-rule-grid article>strong,.ops-markup-grid article>strong { font-size:11px; text-transform:capitalize; }
+.ops-tier-table-wrap { overflow:auto; border:1px solid var(--app-rule); border-radius:7px; }
+.ops-tier-table { width:100%; min-width:1020px; border-collapse:collapse; }
+.ops-tier-table th,.ops-tier-table td { padding:10px; border-right:1px solid #ebe8e1; border-bottom:1px solid #ebe8e1; text-align:left; }
+.ops-tier-table th { color:var(--app-faint); background:#f8f7f3; font:10px var(--font-geist-mono),monospace; text-transform:uppercase; }
+.ops-tier-table input { width:112px; height:35px; padding:0 8px; border:1px solid var(--app-rule); border-radius:4px; background:#fffefa; color:var(--app-ink); font-size:11px; outline:none; }
+.ops-tier-table input:focus { border-color:#3859a8; box-shadow:0 0 0 2px #e9eefb; }
+.ops-advanced-rules { border-top:1px solid var(--app-rule); }
+.ops-advanced-rules summary { padding:18px 22px; color:#3859a8; cursor:pointer; font-size:11px; font-weight:600; }
+.ops-advanced-rules .ops-rules-json { padding-top:0; }
+
+@media (max-width:1023px) { .ops-route-rule-grid,.ops-markup-grid { grid-template-columns:1fr; } }
+@media (max-width:700px) { .ops-login-card { padding:28px 22px; } .ops-rule-section { padding:18px 16px; } }

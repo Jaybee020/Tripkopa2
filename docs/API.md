@@ -54,12 +54,12 @@ Authentication and operations routes use a Supabase session stored in HTTP cooki
 
 ```bash
 curl -c tripkopa-cookies.txt -b tripkopa-cookies.txt \
-  -X POST "$TRIPKOPA_URL/api/auth/login" \
+  -X POST "$TRIPKOPA_URL/api/operations/auth/login" \
   -H 'Content-Type: application/json' \
-  --data '{"email":"operator@example.com","password":"your-password"}'
+  --data '{"email":"admin@example.com","password":"your-environment-password"}'
 ```
 
-Use `-c tripkopa-cookies.txt -b tripkopa-cookies.txt` on later operations calls. The resolve endpoint also requires a `staff_profiles.role` of `operations`, `operations_staff`, or `admin`. The current list, reconciliation, and cancellation handlers require a valid session but do not perform that extra role check.
+Configure `TRIPKOPA_ADMIN_EMAIL` and `TRIPKOPA_ADMIN_PASSWORD` on the server. The first successful environment-credential sign-in bootstraps the matching Supabase Auth user and `admin` staff profile. Use `-c tripkopa-cookies.txt -b tripkopa-cookies.txt` on later operations calls. Every operations endpoint requires a staff role; rule and trust-tier mutations require `admin`.
 
 ### KYC browser authentication
 
@@ -133,6 +133,7 @@ Many records come directly from Postgres. Decimal amount fields may therefore be
 | `GET` | `/api/payments/{payment_id}` | Agent | Read a payment |
 | `POST` | `/api/payments/{payment_id}/refunds` | Agent | Request a refund |
 | `GET` | `/api/events` | Agent | List customer operational events |
+| `POST` | `/api/operations/auth/login` | Environment admin credentials | Bootstrap/sign in the operations administrator |
 | `GET` | `/api/operations/bookings` | Staff | List all bookings |
 | `GET` | `/api/operations/bookings/{booking_id}` | Staff + role | Read operations booking detail with payments, installments, ledger, itinerary, and audit events |
 | `POST` | `/api/operations/bookings/{booking_id}/cancel` | Staff | Mark a booking cancellation pending |
@@ -889,7 +890,7 @@ Returns `{ "updated": true }`.
 
 ## Operations API
 
-Retain the Supabase auth cookies created by login.
+Sign in at `/ops/login` (or call `/api/operations/auth/login`) and retain the Supabase auth cookies created by login. The dashboard at `/ops/dashboard` is protected by both a valid session and an operations staff role.
 
 ### List bookings and reconciliation records
 

@@ -48,6 +48,11 @@ import type {
 type RecordValue = Record<string, unknown>;
 type QueueStatus = "Needs review" | "In progress" | "Resolved";
 type NavItem = "Overview" | "Bookings" | "Rules" | "Reconciliation";
+type RouteCategory = "domestic" | "regional" | "international";
+type TrustTier = "OBSERVER" | "EXPLORER" | "VOYAGER" | "NAVIGATOR" | "AMBASSADOR";
+
+const ROUTES: RouteCategory[] = ["domestic", "regional", "international"];
+const TIERS: TrustTier[] = ["OBSERVER", "EXPLORER", "VOYAGER", "NAVIGATOR", "AMBASSADOR"];
 
 const REVIEW_STATUSES = new Set([
   "MANUAL_REVIEW",
@@ -272,6 +277,80 @@ export default function OperationsDashboard() {
   const selectedBooking = detail ? asRecord(detail.booking) : null;
   const selectedCustomer = detail ? asRecord(detail.customer) : null;
   const ruleValue = asRecord(rules?.value);
+  const draftRuleValue = useMemo(() => {
+    try {
+      return asRecord(JSON.parse(rulesJson));
+    } catch {
+      return {};
+    }
+  }, [rulesJson]);
+
+  const ruleNumber = (path: string[], fallback = 0) => {
+    let value: unknown = draftRuleValue;
+    for (const key of path) value = asRecord(value)[key];
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const updateRuleDraft = (mutate: (draft: RecordValue) => void) => {
+    setRulesJson((current) => {
+      try {
+        const draft = asRecord(JSON.parse(current));
+        mutate(draft);
+        return JSON.stringify(draft, null, 2);
+      } catch {
+        setError("Fix the advanced JSON before using the rule controls.");
+        return current;
+      }
+    });
+  };
+
+  const setRuleNumber = (path: string[], raw: string, percentage = false) => {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return;
+    updateRuleDraft((draft) => {
+      let target = draft;
+      for (const key of path.slice(0, -1)) {
+        target[key] = asRecord(target[key]);
+        target = target[key] as RecordValue;
+      }
+      target[path.at(-1)!] = percentage ? parsed / 100 : parsed;
+      if (path[0] === "repayment_due_days_before_departure") {
+        draft.generated_due_days_before_departure = parsed;
+      }
+      if (path[0] === "max_financing_weeks" && path[1]) {
+        const markup = asRecord(draft.markup);
+        const brackets = Array.isArray(markup[path[1]]) ? [...markup[path[1]] as unknown[]] : [];
+        const lastIndex = brackets.length - 1;
+        if (lastIndex >= 0 && Array.isArray(brackets[lastIndex])) {
+          const finalBracket = [...brackets[lastIndex] as unknown[]];
+          finalBracket[0] = parsed;
+          brackets[lastIndex] = finalBracket;
+          markup[path[1]] = brackets;
+          draft.markup = markup;
+        }
+      }
+      if (path[0] === "repayment_due_days_before_departure" || path[0] === "grace_period_days") {
+        const due = Number(draft.repayment_due_days_before_departure || 0);
+        const grace = Number(draft.grace_period_days || 0);
+        draft.grace_hard_stop_days_before_departure = due - grace;
+      }
+    });
+  };
+
+  const setMarkupRate = (route: RouteCategory, index: number, raw: string) => {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return;
+    updateRuleDraft((draft) => {
+      const markup = asRecord(draft.markup);
+      const brackets = Array.isArray(markup[route]) ? [...markup[route] as unknown[]] : [];
+      const bracket = Array.isArray(brackets[index]) ? [...brackets[index] as unknown[]] : [];
+      bracket[1] = parsed / 100;
+      brackets[index] = bracket;
+      markup[route] = brackets;
+      draft.markup = markup;
+    });
+  };
 
   const refresh = async () => {
     await loadDashboard(false);
@@ -341,6 +420,9 @@ export default function OperationsDashboard() {
     setActionLoading("rules");
     try {
       const parsed = JSON.parse(rulesJson) as Record<string, unknown>;
+      if (parsed.rule_version === ruleValue.rule_version) {
+        parsed.rule_version = `flex_admin_${new Date().toISOString().replace(/\D/g, "").slice(0, 17)}`;
+      }
       const saved = await updateOperationsRules({
         value: parsed,
         description: "MVP flexible payment rules updated from operations dashboard.",
@@ -395,7 +477,7 @@ export default function OperationsDashboard() {
             <div className="ops-avatar">{displayName.slice(0, 2).toUpperCase()}</div>
             <div>
               <strong>{displayName}</strong>
-              <span>Operations staff</span>
+              <span>Administrator</span>
             </div>
           </div>
         </div>
@@ -420,7 +502,7 @@ export default function OperationsDashboard() {
               className="ops-signout"
               onClick={async () => {
                 await logout();
-                window.location.assign("/login");
+                window.location.assign("/ops/login");
               }}
             >
               <LogOut size={16} />
@@ -580,10 +662,110 @@ export default function OperationsDashboard() {
                   {actionLoading === "rules" ? "Saving" : "Save rules"}
                 </button>
               </div>
-              <label className="ops-rules-json">
-                <span>Versioned financing rule JSON</span>
-                <textarea value={rulesJson} onChange={(event) => setRulesJson(event.target.value)} spellCheck={false} />
-              </label>
+              <div className="ops-rule-section">
+                <div className="ops-rule-section-head">
+                  <h3>Pricing and repayment timing</h3>
+                  <p>Configure customer-facing fees and the calendar limits applied to every flexible plan.</p>
+                </div>
+                <div className="ops-rule-grid">
+                  <label className="ops-rule-field">
+                    <span>Full-payment service fee (%)</span>
+                    <input type="number" min="0.01" max="99" step="0.01" value={ruleNumber(["full_service_fee_rate"]) * 100} onChange={(event) => setRuleNumber(["full_service_fee_rate"], event.target.value, true)} />
+                  </label>
+                  <label className="ops-rule-field">
+                    <span>Minimum days before departure</span>
+                    <input type="number" min="21" step="1" value={ruleNumber(["minimum_days_before_departure"], 21)} onChange={(event) => setRuleNumber(["minimum_days_before_departure"], event.target.value)} />
+                  </label>
+                  <label className="ops-rule-field">
+                    <span>Payment due before departure (days)</span>
+                    <input type="number" min="1" step="1" value={ruleNumber(["repayment_due_days_before_departure"], 10)} onChange={(event) => setRuleNumber(["repayment_due_days_before_departure"], event.target.value)} />
+                  </label>
+                  <label className="ops-rule-field">
+                    <span>Grace period (days)</span>
+                    <input type="number" min="1" max={Math.max(1, ruleNumber(["repayment_due_days_before_departure"], 10) - 1)} step="1" value={ruleNumber(["grace_period_days"], 3)} onChange={(event) => setRuleNumber(["grace_period_days"], event.target.value)} />
+                  </label>
+                </div>
+                <div className="ops-policy-note">
+                  The current policy requires at least 21 days before departure, full repayment 10 days before travel, and no post-travel balance. Grace currently ends {ruleNumber(["grace_hard_stop_days_before_departure"], 7)} days before departure.
+                </div>
+              </div>
+
+              <div className="ops-rule-section">
+                <div className="ops-rule-section-head">
+                  <h3>Route repayment limits</h3>
+                  <p>Set the maximum financing window and number of repayments for each route class.</p>
+                </div>
+                <div className="ops-route-rule-grid">
+                  {ROUTES.map((route) => (
+                    <article key={route}>
+                      <strong>{route}</strong>
+                      <label className="ops-rule-field">
+                        <span>Maximum weeks</span>
+                        <input type="number" min="1" step="1" value={ruleNumber(["max_financing_weeks", route])} onChange={(event) => setRuleNumber(["max_financing_weeks", route], event.target.value)} />
+                      </label>
+                      <label className="ops-rule-field">
+                        <span>Maximum repayments</span>
+                        <input type="number" min="1" step="1" value={ruleNumber(["max_installments", route])} onChange={(event) => setRuleNumber(["max_installments", route], event.target.value)} />
+                      </label>
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <div className="ops-rule-section">
+                <div className="ops-rule-section-head">
+                  <h3>Flexible-plan markup</h3>
+                  <p>These are commercial markup percentages by repayment window, not an APR.</p>
+                </div>
+                <div className="ops-markup-grid">
+                  {ROUTES.map((route) => {
+                    const brackets = asRecord(draftRuleValue.markup)[route];
+                    return (
+                      <article key={route}>
+                        <strong>{route}</strong>
+                        {(Array.isArray(brackets) ? brackets : []).map((entry, index) => {
+                          const bracket = Array.isArray(entry) ? entry : [];
+                          return (
+                            <label className="ops-rule-field" key={`${route}-${index}`}>
+                              <span>Up to {Number(bracket[0] || 0)} weeks (%)</span>
+                              <input type="number" min="0.01" max="99" step="0.01" value={Number(bracket[1] || 0) * 100} onChange={(event) => setMarkupRate(route, index, event.target.value)} />
+                            </label>
+                          );
+                        })}
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="ops-rule-section">
+                <div className="ops-rule-section-head">
+                  <h3>Tier deposits and financing caps</h3>
+                  <p>Control the minimum upfront deposit and maximum party total for every tier and route.</p>
+                </div>
+                <div className="ops-tier-table-wrap">
+                  <table className="ops-tier-table">
+                    <thead><tr><th>Tier</th>{ROUTES.map((route) => <th key={`${route}-deposit`}>{route} deposit</th>)}{ROUTES.map((route) => <th key={`${route}-cap`}>{route} cap (NGN)</th>)}</tr></thead>
+                    <tbody>
+                      {TIERS.map((tier) => (
+                        <tr key={tier}>
+                          <th>{tier}</th>
+                          {ROUTES.map((route) => <td key={`${tier}-${route}-deposit`}><input aria-label={`${tier} ${route} deposit percentage`} type="number" min="1" max="99" step="0.01" value={ruleNumber(["deposit_rates", tier, route]) * 100} onChange={(event) => setRuleNumber(["deposit_rates", tier, route], event.target.value, true)} /></td>)}
+                          {ROUTES.map((route) => <td key={`${tier}-${route}-cap`}><input aria-label={`${tier} ${route} financing cap`} type="number" min="1" step="1000" value={ruleNumber(["financing_caps", tier, route])} onChange={(event) => setRuleNumber(["financing_caps", tier, route], event.target.value)} /></td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <details className="ops-advanced-rules">
+                <summary>Advanced JSON editor</summary>
+                <label className="ops-rules-json">
+                  <span>Versioned financing rule JSON</span>
+                  <textarea value={rulesJson} onChange={(event) => setRulesJson(event.target.value)} spellCheck={false} />
+                </label>
+              </details>
             </section>
           )}
         </div>

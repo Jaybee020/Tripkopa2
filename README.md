@@ -27,6 +27,8 @@ Required server environment variables:
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
+TRIPKOPA_ADMIN_EMAIL=admin@example.com
+TRIPKOPA_ADMIN_PASSWORD=use-a-long-unique-password
 WHATSAPP_AGENT_API_SECRET=use-a-long-random-secret
 WHATSAPP_ACCESS_TOKEN=meta-cloud-api-access-token
 WHATSAPP_PHONE_NUMBER_ID=meta-business-phone-number-id
@@ -55,6 +57,19 @@ TAKETRIPS_MOCK_ORDER_SUCCESS=false
 
 The service-role key and agent secret must never be exposed in browser code or
 WhatsApp workflow payloads.
+
+## Operations administrator
+
+Open `/ops/login` and sign in with `TRIPKOPA_ADMIN_EMAIL` and
+`TRIPKOPA_ADMIN_PASSWORD`. On the first successful sign-in, the server creates
+or updates the matching confirmed Supabase Auth user and assigns its
+`staff_profiles` role to `admin`. The browser then uses a normal secure
+Supabase session; the environment password is never returned to the client.
+
+The admin dashboard can manage flexible-plan markup, service fees, repayment
+timing, route windows, installment limits, tier deposits, financing caps,
+bookings, and reconciliation. Rule edits are versioned and audited. Apply all
+Supabase migrations before using the dashboard.
 
 ### Resolve or create a customer
 

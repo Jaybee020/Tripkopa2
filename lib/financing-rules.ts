@@ -115,7 +115,7 @@ function validRules(value: unknown): value is FinancingRules {
   }
   for (const tier of TRUST_TIERS) {
     const rate = typed.post_travel_rates[tier];
-    if (typeof rate !== "number" || rate < 0 || rate > 0.3) return false;
+    if (typeof rate !== "number" || rate !== 0) return false;
   }
   return true;
 }

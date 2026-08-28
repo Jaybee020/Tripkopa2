@@ -70,6 +70,13 @@ export async function login(body: SigninInput): Promise<AuthSession> {
   return request<AuthSession>("POST", "/api/auth/login", body);
 }
 
+export async function loginOperationsAdmin(body: SigninInput): Promise<{
+  user: { id: string; email?: string };
+  role: "admin";
+}> {
+  return request("POST", "/api/operations/auth/login", body);
+}
+
 export async function createAuthRefresh(body: RefreshTokenInput): Promise<AuthSession> {
   return request<AuthSession>("POST", "/api/auth/refresh", body);
 }
