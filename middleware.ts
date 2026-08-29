@@ -1,5 +1,5 @@
-import { createServerClient } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -11,7 +11,8 @@ export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const isOperationsDashboard = request.nextUrl.pathname.startsWith("/ops/dashboard");
+  const isOperationsDashboard =
+    request.nextUrl.pathname.startsWith("/ops/dashboard");
   const isOperationsLogin = request.nextUrl.pathname.startsWith("/ops/login");
 
   if (!url || !key) {
@@ -44,7 +45,9 @@ export async function middleware(request: NextRequest) {
 
   // getUser() validates the JWT against Supabase; never trust getSession()
   // alone in middleware.
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   let isOperationsStaff = false;
   if (user && (isOperationsDashboard || isOperationsLogin)) {
@@ -66,16 +69,18 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protect all customer dashboard and settings routes by default
-  const isProtected = request.nextUrl.pathname.startsWith("/dashboard") ||
-                      request.nextUrl.pathname.startsWith("/settings");
+  const isProtected =
+    request.nextUrl.pathname.startsWith("/dashboard") ||
+    request.nextUrl.pathname.startsWith("/settings");
 
   if (isProtected && !user) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   // Auth routes (redirect to dashboard if already logged in)
-  const isAuthPath = request.nextUrl.pathname.startsWith("/login") ||
-                     request.nextUrl.pathname.startsWith("/signup");
+  const isAuthPath =
+    request.nextUrl.pathname.startsWith("/login") ||
+    request.nextUrl.pathname.startsWith("/signup");
 
   if (isAuthPath && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
@@ -86,6 +91,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
+    "/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
   ],
 };
