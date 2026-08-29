@@ -660,6 +660,10 @@ curl -X POST "$TRIPKOPA_URL/api/bookings" \
 
 `booking_type` must be `full` or `flexible`; `passengers` must contain at least one object. `terms_accepted` defaults to `false`.
 
+`passengers` should be sent as a JSON array. For compatibility with agent and
+workflow clients that serialize nested inputs, the endpoint also accepts a
+JSON-encoded array string and validates the decoded passengers normally.
+
 Passenger input accepts either Tripkopa snake-case fields or TakeTrips camel-case fields. The backend validates the required identity and contact fields, normalizes them to `firstName`, `lastName`, `dob`, `passportNumber`, and `passportExpiry`, and stores the normalized payload before any payment can be requested.
 
 When terms are accepted:

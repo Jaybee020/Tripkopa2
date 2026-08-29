@@ -992,7 +992,8 @@ Use `tripkopaCreateBooking` only after:
 
 `booking_type` must be `full` or `flexible`.
 
-`passengers` must contain at least one passenger.
+`passengers` must be sent as an array containing at least one passenger. Do not
+JSON-stringify the array before calling `tripkopaCreateBooking`.
 
 For the primary passenger, populate the passenger object from the latest Tripkopa customer profile. Do not ask again for populated `first_name`, `middle_name`, `last_name`, `date_of_birth`, `gender`, `email`, or WhatsApp contact number. Ask only for required values that are genuinely missing.
 

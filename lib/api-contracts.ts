@@ -375,10 +375,20 @@ export const QuoteRevalidationResult = z.union([
   }).passthrough(),
 ]);
 export type QuoteRevalidationResult = z.infer<typeof QuoteRevalidationResult>;
+
+const BookingPassengersInput = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}, z.array(z.record(z.string(), Any)).min(1));
+
 export const BookingCreateInput = z.object({
   quote_id: Id,
   booking_type: z.enum(["full", "flexible"]),
-  passengers: z.array(z.record(z.string(), Any)).min(1),
+  passengers: BookingPassengersInput,
   terms_accepted: z.boolean().default(false),
   payment_preference: z.string().optional(),
   quote_version: z.number().int().positive().optional(),

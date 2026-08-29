@@ -491,6 +491,10 @@ Body:
 
 Allowed `booking_type` values: `full`, `flexible`.
 
+Send `passengers` as an array. The backend also accepts a JSON-encoded array
+string from workflow clients that serialize nested tool inputs, then applies
+the same passenger validation after decoding it.
+
 If `terms_accepted` is `true`, the booking status starts as
 `AWAITING_PAYMENT`; otherwise it starts as `AWAITING_TERMS`.
 
