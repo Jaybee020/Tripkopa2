@@ -9,11 +9,13 @@ import {
   travellerSummary,
 } from "@/lib/flight-search-scope";
 import { bad, failure } from "@/lib/api-utils";
+import { assertFlightRouteAvailable } from "@/lib/airport-regions";
 
 export async function POST(request: Request) {
   try {
     const input = FlightSearchInput.parse(await request.json());
     const { customer, supabase } = await requireAgentCustomer(request);
+    assertFlightRouteAvailable(input.origin, input.destination);
     const passengerCount =
       input.adult_count + input.children_count + input.infant_count;
     const provider = await taketrips.search({

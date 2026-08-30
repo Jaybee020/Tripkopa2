@@ -22,6 +22,7 @@ const ISSUE_KEYS = [
   "days_until_departure",
   "minimum_days_before_departure",
   "earliest_eligible_departure_date",
+  "latest_eligible_departure_date",
   "repayment_deadline",
 ] as const;
 
@@ -39,7 +40,7 @@ function issueFrom(error: unknown) {
     }
   }
   return {
-    message: customerErrorMessage(error),
+    message: customerErrorMessage({ ...value, ...issue }),
     ...issue,
   };
 }

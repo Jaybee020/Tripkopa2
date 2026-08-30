@@ -6,12 +6,15 @@ import { bad, failure } from "@/lib/api-utils";
 import { toCustomerBooking, type CustomerBookingRow } from "@/lib/itinerary-delivery";
 import { applyBookingPayment } from "@/lib/booking-payments";
 import { normalizeTakeTripsPassengers } from "@/lib/taketrips-passengers";
+import { assertFlightRouteAvailable } from "@/lib/airport-regions";
 
 type QuoteDetails = {
   offer?: unknown;
   booking_type?: string;
   fare_rules?: { ticket_type?: string } & Record<string, unknown>;
   search?: {
+    origin?: string;
+    destination?: string;
     departure_date?: string;
     return_date?: string | null;
   };
@@ -58,6 +61,21 @@ export async function POST(request: Request) {
     }
 
     const details = quote.details as QuoteDetails;
+    if (details.search?.origin && details.search?.destination) {
+      assertFlightRouteAvailable(
+        details.search.origin,
+        details.search.destination,
+      );
+    } else if (quote.route_category === "domestic") {
+      throw Object.assign(
+        new Error("Local flight routes are temporarily unavailable"),
+        {
+          status: 422,
+          code: "LOCAL_ROUTES_UNAVAILABLE",
+          route_category: "domestic",
+        },
+      );
+    }
     if (details.booking_type && details.booking_type !== input.booking_type) {
       return NextResponse.json({ error: "Booking type does not match the quote" }, { status: 409 });
     }

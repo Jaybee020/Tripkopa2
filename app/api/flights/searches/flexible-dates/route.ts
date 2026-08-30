@@ -11,6 +11,7 @@ import {
 import { bad, failure } from "@/lib/api-utils";
 import { taketrips } from "@/lib/services/taketrips";
 import { filterSearchResultsByTicketType } from "@/lib/ticket-rules";
+import { assertFlightRouteAvailable } from "@/lib/airport-regions";
 
 const SEARCH_CONCURRENCY = 5;
 const MAX_SEARCH_REQUESTS = 225;
@@ -51,6 +52,9 @@ export async function POST(request: Request) {
   try {
     const input = FlexibleDateFlightSearchInput.parse(await request.json());
     const { customer, supabase } = await requireAgentCustomer(request);
+    for (const origin of input.origin_codes) {
+      assertFlightRouteAvailable(origin, input.destination);
+    }
     const dateCombinations = buildDateCombinations(input);
     const tasks: SearchTask[] = dateCombinations.flatMap((combination) => (
       input.origin_codes.map((origin) => ({

@@ -12,6 +12,7 @@ import { loadFinancingRules } from "@/lib/financing-rules";
 import { refreshCustomerTrustTier } from "@/lib/trust-financing";
 import { normalizeFareRules } from "@/lib/ticket-rules";
 import { offerSearchMetadata } from "@/lib/flight-search-scope";
+import { assertFlightRouteAvailable } from "@/lib/airport-regions";
 
 export function resultShape(value: unknown) {
   if (Array.isArray(value)) return { type: "array", length: value.length };
@@ -94,6 +95,10 @@ export async function prepareQuote(input: {
     return_date: search.return_date,
     ngn_total: null,
   };
+  assertFlightRouteAvailable(
+    selectedSearchScope.origin,
+    selectedSearchScope.destination,
+  );
   const baseAmount =
     quote.base_amount ??
     selectedSearchScope.ngn_total ??

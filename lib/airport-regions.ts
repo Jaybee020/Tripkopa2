@@ -41,6 +41,31 @@ export function airportRegion(iata: string): AirportRegion | null {
   return null;
 }
 
+export const LOCAL_ROUTE_UNAVAILABLE_MESSAGE =
+  "Local routes aren't available at the moment. Regional flights within Africa and international flights are the available options.";
+
+/**
+ * Enforce inventory availability before a provider search is attempted.
+ *
+ * Unknown codes are left to normal provider validation. A route is rejected
+ * only when both endpoints are known Nigerian airports, so this guard cannot
+ * accidentally classify an unfamiliar international code as local.
+ */
+export function assertFlightRouteAvailable(origin: string, destination: string) {
+  const from = airportRegion(origin);
+  const to = airportRegion(destination);
+  if (from?.country === "NG" && to?.country === "NG") {
+    throw Object.assign(
+      new Error("Local flight routes are temporarily unavailable"),
+      {
+        status: 422,
+        code: "LOCAL_ROUTES_UNAVAILABLE",
+        route_category: "domestic",
+      },
+    );
+  }
+}
+
 export function classifyRoute(origin: string, destination: string): RouteCategory {
   const from = airportRegion(origin);
   const to = airportRegion(destination);
