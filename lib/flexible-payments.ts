@@ -217,6 +217,8 @@ export function priceQuote(input: QuotePricingInput): QuotePricing {
   }
 
   const rules = input.rules ?? DEFAULT_FINANCING_RULES;
+  const category = classifyRoute(input.origin, input.destination);
+  const tier = input.trustTier ?? "OBSERVER";
 
   if (input.bookingType === "full") {
     return {
@@ -225,15 +227,13 @@ export function priceQuote(input: QuotePricingInput): QuotePricing {
       deposit_amount: null,
       installment_amount: null,
       rule_version: rules.rule_version,
-      route_category: null,
-      trust_tier: null,
+      route_category: category,
+      trust_tier: tier,
       financing_cap: null,
       repayment_plan: null,
     };
   }
 
-  const category = classifyRoute(input.origin, input.destination);
-  const tier = input.trustTier ?? "OBSERVER";
   const departure = utcDate(input.departureDate);
   const today = utcDate(isoDate(new Date()));
   const daysUntilDeparture = Math.floor(

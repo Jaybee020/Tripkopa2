@@ -5,7 +5,6 @@ import { loadFinancingRules } from "@/lib/financing-rules";
 import { evaluateRepaymentLifecycle } from "@/lib/trust-financing";
 import {
   buildPartialItinerary,
-  isFullyRepaid,
   type CustomerBookingRow,
 } from "@/lib/itinerary-delivery";
 
@@ -39,7 +38,7 @@ export async function GET(
     if (!itinerary) {
       return NextResponse.json({ error: "Itinerary is not available yet" }, { status: 404 });
     }
-    if (!isFullyRepaid(typedBooking)) {
+    if (itinerary.release_level !== "FULL") {
       return NextResponse.json(buildPartialItinerary(typedBooking));
     }
 

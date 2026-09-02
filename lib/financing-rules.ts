@@ -13,6 +13,20 @@ export type TrustTier = (typeof TRUST_TIERS)[number];
 type RouteValues = Record<RouteCategory, number>;
 type TierRouteValues = Record<TrustTier, RouteValues>;
 
+export const APPROVED_DISCOUNT_TYPES = [
+  "PROMOTIONAL_CAMPAIGN",
+  "REFERRAL_CAMPAIGN",
+  "STRATEGIC_PARTNERSHIP",
+  "LOYALTY_REWARD",
+  "SEASONAL_CAMPAIGN",
+] as const;
+
+export const APPROVED_PROMOTIONAL_BENEFITS = [
+  "REDUCED_SERVICE_FEE",
+  "REDUCED_DEPOSIT",
+  "REPAYMENT_FLEXIBILITY_BOOST",
+] as const;
+
 export type FinancingRules = {
   rule_version: string;
   full_service_fee_rate: number;
@@ -28,15 +42,22 @@ export type FinancingRules = {
   deposit_rates: TierRouteValues;
   financing_caps: TierRouteValues;
   post_travel_rates: Record<TrustTier, number>;
+  cancellation_rates: TierRouteValues;
+  cancellation_fee_caps: RouteValues;
+  discount_policy: {
+    approved_types: string[];
+    approved_benefits: string[];
+    blanket_discounts_allowed: false;
+  };
 };
 
 export const DEFAULT_FINANCING_RULES: FinancingRules = {
-  rule_version: "flex_v3_2026_08",
+  rule_version: "pricing_v4_2026_09",
   full_service_fee_rate: 0.05,
   markup: {
-    domestic: [[5, 0.075], [9, 0.1], [12, 0.125]],
-    regional: [[5, 0.075], [9, 0.1], [13, 0.125], [16, 0.175]],
-    international: [[5, 0.075], [9, 0.1], [13, 0.125], [17, 0.175], [21, 0.225], [24, 0.275]],
+    domestic: [[5, 0.05], [9, 0.075], [12, 0.1]],
+    regional: [[5, 0.05], [9, 0.075], [13, 0.1], [16, 0.15]],
+    international: [[5, 0.05], [9, 0.075], [13, 0.1], [17, 0.15], [21, 0.2], [24, 0.25]],
   },
   max_financing_weeks: { domestic: 12, regional: 16, international: 24 },
   max_installments: { domestic: 4, regional: 6, international: 8 },
@@ -54,13 +75,26 @@ export const DEFAULT_FINANCING_RULES: FinancingRules = {
     AMBASSADOR: { domestic: 0.25, regional: 0.35, international: 0.4 },
   },
   financing_caps: {
-    OBSERVER: { domestic: 300000, regional: 1000000, international: 1500000 },
-    EXPLORER: { domestic: 350000, regional: 1200000, international: 1700000 },
-    VOYAGER: { domestic: 400000, regional: 1300000, international: 2000000 },
-    NAVIGATOR: { domestic: 450000, regional: 1400000, international: 2500000 },
-    AMBASSADOR: { domestic: 500000, regional: 1500000, international: 3000000 },
+    OBSERVER: { domestic: 450000, regional: 2500000, international: 4500000 },
+    EXPLORER: { domestic: 500000, regional: 3000000, international: 5000000 },
+    VOYAGER: { domestic: 600000, regional: 4000000, international: 6000000 },
+    NAVIGATOR: { domestic: 700000, regional: 5000000, international: 7000000 },
+    AMBASSADOR: { domestic: 800000, regional: 6000000, international: 8000000 },
   },
-  post_travel_rates: { OBSERVER: 0, EXPLORER: 0, VOYAGER: 0, NAVIGATOR: 0, AMBASSADOR: 0 },
+  post_travel_rates: { OBSERVER: 0, EXPLORER: 0, VOYAGER: 0.1, NAVIGATOR: 0.2, AMBASSADOR: 0.3 },
+  cancellation_rates: {
+    OBSERVER: { domestic: 0.2, regional: 0.2, international: 0.25 },
+    EXPLORER: { domestic: 0.175, regional: 0.175, international: 0.23 },
+    VOYAGER: { domestic: 0.15, regional: 0.15, international: 0.2 },
+    NAVIGATOR: { domestic: 0.12, regional: 0.12, international: 0.17 },
+    AMBASSADOR: { domestic: 0.1, regional: 0.1, international: 0.13 },
+  },
+  cancellation_fee_caps: { domestic: 0.2, regional: 0.2, international: 0.25 },
+  discount_policy: {
+    approved_types: [...APPROVED_DISCOUNT_TYPES],
+    approved_benefits: [...APPROVED_PROMOTIONAL_BENEFITS],
+    blanket_discounts_allowed: false,
+  },
 };
 
 export function isTrustTier(value: unknown): value is TrustTier {
@@ -74,6 +108,7 @@ function validRules(value: unknown): value is FinancingRules {
     rule.rule_version && typeof rule.full_service_fee_rate === "number" &&
     rule.markup && rule.deposit_rates && rule.financing_caps &&
     rule.max_financing_weeks && rule.max_installments && rule.post_travel_rates &&
+    rule.cancellation_rates && rule.cancellation_fee_caps && rule.discount_policy &&
     typeof rule.minimum_days_before_departure === "number" &&
     typeof rule.repayment_due_days_before_departure === "number" &&
     typeof rule.generated_due_days_before_departure === "number" &&
@@ -110,13 +145,34 @@ function validRules(value: unknown): value is FinancingRules {
     for (const tier of TRUST_TIERS) {
       const deposit = typed.deposit_rates[tier]?.[route];
       const cap = typed.financing_caps[tier]?.[route];
-      if (!positive(deposit) || deposit >= 1 || !positive(cap)) return false;
+      const cancellationRate = typed.cancellation_rates[tier]?.[route];
+      const cancellationCap = typed.cancellation_fee_caps[route];
+      if (
+        !positive(deposit) || deposit >= 1 || !positive(cap) ||
+        !positive(cancellationRate) || cancellationRate > cancellationCap ||
+        !positive(cancellationCap) || cancellationCap >= 1
+      ) return false;
     }
   }
+  const expectedPostTravelRates: Record<TrustTier, number> = {
+    OBSERVER: 0,
+    EXPLORER: 0,
+    VOYAGER: 0.1,
+    NAVIGATOR: 0.2,
+    AMBASSADOR: 0.3,
+  };
   for (const tier of TRUST_TIERS) {
     const rate = typed.post_travel_rates[tier];
-    if (typeof rate !== "number" || rate !== 0) return false;
+    if (
+      typeof rate !== "number" || !Number.isFinite(rate) || rate < 0 ||
+      rate > expectedPostTravelRates[tier]
+    ) return false;
   }
+  if (
+    typed.discount_policy.blanket_discounts_allowed !== false ||
+    !APPROVED_DISCOUNT_TYPES.every((type) => typed.discount_policy.approved_types.includes(type)) ||
+    !APPROVED_PROMOTIONAL_BENEFITS.every((benefit) => typed.discount_policy.approved_benefits.includes(benefit))
+  ) return false;
   return true;
 }
 

@@ -117,9 +117,9 @@ export async function prepareQuote(input: {
     ? "NGN"
     : extractOfferCurrency(offer, quote.currency);
   const rules = await loadFinancingRules(supabase);
-  const trust = quote.booking_type === "flexible"
-    ? await refreshCustomerTrustTier(supabase, customerId)
-    : null;
+  // Snapshot the effective tier for both payment types because cancellation
+  // deductions are tier-based even when the fare was paid in full.
+  const trust = await refreshCustomerTrustTier(supabase, customerId);
   const pricing = priceQuote({
     origin: selectedSearchScope.origin,
     destination: selectedSearchScope.destination,
@@ -130,7 +130,7 @@ export async function prepareQuote(input: {
     installmentCount: quote.installment_count,
     repaymentPlanRequest: quote.repayment_plan_request,
     travelCompletionDate: selectedSearchScope.return_date || selectedSearchScope.departure_date,
-    trustTier: trust?.effective_tier,
+    trustTier: trust.effective_tier,
     rules,
   });
 

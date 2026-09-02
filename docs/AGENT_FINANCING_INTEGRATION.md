@@ -1,7 +1,7 @@
 # Tripkopa Agent Financing and Notification Integration
 
-Document version: 1.0  
-Last updated: 18 August 2026
+Document version: 1.1
+Last updated: 2 September 2026
 
 ## 1. Purpose
 
@@ -70,9 +70,9 @@ No request body is required.
     "international": 0.50
   },
   "financing_caps": {
-    "domestic": 350000,
-    "regional": 1200000,
-    "international": 1700000
+    "domestic": 500000,
+    "regional": 3000000,
+    "international": 5000000
   },
   "post_travel_max_percentage": 0,
   "schedule_constraints": {
@@ -82,7 +82,7 @@ No request body is required.
     "grace_period_days": 3,
     "grace_hard_stop_days_before_departure": 7
   },
-  "rule_version": "flex_v3_2026_08"
+  "rule_version": "pricing_v4_2026_09"
 }
 ```
 
@@ -90,7 +90,7 @@ No request body is required.
 
 - Call this endpoint after KYC and before creating a flexible quote.
 - Use `effective_tier`, not `computed_tier`, for customer eligibility.
-- Treat the returned deposit rates, caps, schedule constraints, and rule version as authoritative. The current post-travel allowance is zero for every tier.
+- Treat returned deposit rates, caps, schedule constraints, post-travel allowance, and rule version as authoritative internal context. Post-travel settlement is available only to Voyager (10%), Navigator (20%), and Ambassador (30%).
 - Do not offer flexible payment when departure is fewer than 21 calendar days away.
 - Schedule the entire outstanding balance for completion 10 days before departure; the maximum 3-day grace period ends 7 days before departure.
 - Do not manually calculate or promise a final deposit. The quote response is the source of truth for the actual amount.
@@ -186,13 +186,18 @@ Monthly example:
 ```
 
 Flexible payment is available only when departure is at least 21 calendar days
-away. Generated and custom schedules finish the entire balance 10 days before
-departure. The final repayment then has at most 3 grace days, with a hard stop
-7 days before departure.
+away. Unless an eligible customer explicitly accepts an allowed post-travel
+balance, generated and custom schedules finish the entire balance 10 days before
+departure. The final pre-travel repayment then has at most 3 grace days, with a
+hard stop 7 days before departure.
 
 ### 6.3 Post-travel settlement
 
-Post-travel settlement is disabled under the current repayment policy. Do not include `post_travel` or `POST_TRAVEL` installment rows. The full outstanding balance must be scheduled before departure.
+Post-travel settlement is restricted to Voyager, Navigator, and Ambassador. Use
+the percentage returned by `tripkopaGetFinancingProfile` as the maximum, require
+the customer to explicitly accept it, and schedule the final post-travel payment
+within 90 days after travel completion. Observer and Explorer plans must complete
+the full outstanding balance before departure.
 
 ### 6.4 Customer-proposed custom plan
 
@@ -283,7 +288,7 @@ For flexible quotes, present only backend-returned customer-facing information:
 - `total_amount`
 - `deposit_amount`
 - outstanding balance
-- installment amounts and due dates from `details.pricing.repayment_plan`
+- installment amounts and due dates from `pricing.repayment_plan`
 - repayment and grace deadlines
 - quote expiry
 

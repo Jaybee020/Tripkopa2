@@ -5,6 +5,7 @@ import { requireAgentCustomer } from "@/lib/auth/agent";
 import { bad, customerErrorMessage, failure } from "@/lib/api-utils";
 import { addDays, isoDate } from "@/lib/flexible-payments";
 import { prepareQuote } from "@/lib/quote-preparation";
+import { toCustomerPricing } from "@/lib/customer-pricing";
 
 const BUSINESS_STATUSES = new Set([400, 404, 409, 422]);
 const ISSUE_KEYS = [
@@ -14,7 +15,6 @@ const ISSUE_KEYS = [
   "maximum_installments",
   "maximum_percentage",
   "maximum_amount",
-  "financing_cap",
   "total_amount",
   "required_amount",
   "scheduled_amount",
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       route_category: prepared.pricing.route_category,
       departure_date: prepared.selectedSearchScope.departure_date,
       currency: prepared.currency,
-      pricing: prepared.pricing,
+      pricing: toCustomerPricing(prepared.pricing),
       rule_version: prepared.rules.rule_version,
     });
   } catch (error) {

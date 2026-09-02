@@ -16,6 +16,7 @@ import { refreshCustomerTrustTier } from "@/lib/trust-financing";
 import { normalizeFareRules } from "@/lib/ticket-rules";
 import { bad, failure } from "@/lib/api-utils";
 import { recoverProviderQuote } from "@/lib/quote-recovery";
+import { toCustomerQuote, toStoredQuotePricing } from "@/lib/customer-pricing";
 
 type QuoteDetails = {
   offer?: unknown;
@@ -166,9 +167,7 @@ export async function POST(
     }
     const bookingType = details.booking_type === "flexible" ? "flexible" : "full";
     const rules = await loadFinancingRules(supabase);
-    const trust = bookingType === "flexible"
-      ? await refreshCustomerTrustTier(supabase, customer.id)
-      : null;
+    const trust = await refreshCustomerTrustTier(supabase, customer.id);
     let pricing;
     try {
       pricing = priceQuote({
@@ -179,7 +178,7 @@ export async function POST(
         baseAmount,
         currency: extractOfferCurrency(provider, quote.currency),
         bookingType,
-        trustTier: trust?.effective_tier,
+        trustTier: trust.effective_tier,
         rules,
         repaymentPlanRequest: details.pricing?.repayment_plan?.request_snapshot,
         rescaleCustomPlan: true,
@@ -194,9 +193,8 @@ export async function POST(
     const nextDetails = {
       ...details,
       offer: provider,
-      pricing,
+      pricing: toStoredQuotePricing(pricing),
       fare_rules: normalizeFareRules(provider),
-      rules_snapshot: rules,
       revalidation_error: null,
       revalidated_at: new Date().toISOString(),
     };
@@ -224,7 +222,7 @@ export async function POST(
       .single();
     if (updateError) throw updateError;
 
-    return NextResponse.json(data);
+    return NextResponse.json(toCustomerQuote(data));
   } catch (error) {
     return error instanceof z.ZodError ? bad(error) : failure(error);
   }

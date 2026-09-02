@@ -21,6 +21,54 @@ function validSignature(raw: string, providedHeader: string | null) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+async function flagThirdPartyWalletFunding(input: {
+  accountNumber: string;
+  payerEmail?: string;
+  providerEventId: string;
+}) {
+  if (!input.payerEmail) return;
+  const { data: account, error: accountError } = await supabase.admin
+    .from("virtual_accounts")
+    .select("customer_id")
+    .eq("provider", "onecap_providus")
+    .eq("account_number", input.accountNumber)
+    .maybeSingle();
+  if (accountError) throw accountError;
+  if (!account) return;
+  const { data: customer, error: customerError } = await supabase.admin
+    .from("customers")
+    .select("email")
+    .eq("id", account.customer_id)
+    .single();
+  if (customerError) throw customerError;
+  if (
+    !customer.email ||
+    customer.email.trim().toLowerCase() === input.payerEmail.trim().toLowerCase()
+  ) return;
+
+  const { data: existing, error: existingError } = await supabase.admin
+    .from("customer_risk_events")
+    .select("id")
+    .eq("customer_id", account.customer_id)
+    .eq("event_type", "THIRD_PARTY_WALLET_FUNDING")
+    .contains("details", { provider_event_id: input.providerEventId })
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (!existing) {
+    const { error } = await supabase.admin.from("customer_risk_events").insert({
+      customer_id: account.customer_id,
+      event_type: "THIRD_PARTY_WALLET_FUNDING",
+      severity: "MAJOR",
+      status: "OPEN",
+      details: {
+        provider_event_id: input.providerEventId,
+        reason: "Funding identity differs from the verified wallet identity",
+      },
+    });
+    if (error) throw error;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const raw = await request.text();
@@ -29,6 +77,11 @@ export async function POST(request: Request) {
     }
 
     const payload = OneCapDepositWebhookInput.parse(JSON.parse(raw));
+    await flagThirdPartyWalletFunding({
+      accountNumber: payload.data.account_number,
+      payerEmail: payload.data.user?.email,
+      providerEventId: payload.data.session_id,
+    });
     const { data: paymentId, error } = await supabase.admin.rpc(
       "process_onecap_deposit",
       {

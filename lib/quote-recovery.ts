@@ -11,6 +11,7 @@ import { findEquivalentOffer } from "@/lib/itinerary-match";
 import { taketrips } from "@/lib/services/taketrips";
 import { filterSearchResultsByTicketType, normalizeFareRules } from "@/lib/ticket-rules";
 import { refreshCustomerTrustTier } from "@/lib/trust-financing";
+import { toCustomerQuote, toStoredQuotePricing } from "@/lib/customer-pricing";
 
 type QuoteRow = Record<string, unknown> & {
   id: string;
@@ -96,7 +97,7 @@ function recoveredResponse(previousQuoteId: string, quote: Record<string, unknow
     recovery_reason: "PROVIDER_QUOTE_EXPIRED",
     previous_quote_id: previousQuoteId,
     search_id: quote.search_id,
-    quote,
+    quote: toCustomerQuote(quote),
     changes: recovery?.changes ?? {
       price_changed: true,
       deposit_changed: true,
@@ -258,7 +259,7 @@ export async function recoverProviderQuote(input: {
   }
 
   const rules = await loadFinancingRules(supabase);
-  const trust = bookingType === "flexible" ? await refreshCustomerTrustTier(supabase, customerId) : null;
+  const trust = await refreshCustomerTrustTier(supabase, customerId);
   let pricing;
   try {
     pricing = priceQuote({
@@ -269,7 +270,7 @@ export async function recoverProviderQuote(input: {
       baseAmount,
       currency: extractOfferCurrency(validatedOffer, quote.currency),
       bookingType,
-      trustTier: trust?.effective_tier,
+      trustTier: trust.effective_tier,
       rules,
       repaymentPlanRequest: details.pricing?.repayment_plan?.request_snapshot,
       rescaleCustomPlan: true,
@@ -328,9 +329,8 @@ export async function recoverProviderQuote(input: {
       ticket_type: ticketType,
     },
     booking_type: bookingType,
-    pricing,
+    pricing: toStoredQuotePricing(pricing),
     fare_rules: fareRules,
-    rules_snapshot: rules,
     customer_summary: pricing.repayment_plan
       ? {
           trust_tier: pricing.trust_tier,

@@ -157,7 +157,12 @@ async function maybeTicketBooking(booking: BookingRow, payment: PaymentRow) {
 
 async function maybeReleaseFullItinerary(booking: BookingRow, amountPaid: number) {
   if (booking.booking_type !== "flexible") return;
-  if (amountPaid < money(booking.total_amount)) return;
+  // Eligible tiers may carry a controlled balance after travel. Release the
+  // usable itinerary once the required pre-travel portion has been settled.
+  const requiredBeforeTravel = money(
+    money(booking.total_amount) - money(booking.post_travel_amount),
+  );
+  if (amountPaid < requiredBeforeTravel) return;
   const { data: itinerary, error } = await supabase.admin
     .from("itineraries")
     .select("id,release_level,provider_ticket_reference")
@@ -179,7 +184,10 @@ async function maybeReleaseFullItinerary(booking: BookingRow, amountPaid: number
     customer_id: booking.customer_id,
     booking_id: booking.id,
     event_type: "itinerary.fully_released",
-    payload: { outstanding_balance: 0 },
+    payload: {
+      outstanding_balance: money(booking.total_amount) - amountPaid,
+      post_travel_balance: money(booking.post_travel_amount),
+    },
   });
 }
 

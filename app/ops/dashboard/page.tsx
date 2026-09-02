@@ -686,7 +686,7 @@ export default function OperationsDashboard() {
                   </label>
                 </div>
                 <div className="ops-policy-note">
-                  The current policy requires at least 21 days before departure, full repayment 10 days before travel, and no post-travel balance. Grace currently ends {ruleNumber(["grace_hard_stop_days_before_departure"], 7)} days before departure.
+                  Pre-travel repayments finish 10 days before travel. Voyager, Navigator, and Ambassador may carry a controlled balance for up to {ruleNumber(["post_travel_max_days"], 90)} days after travel. Grace currently ends {ruleNumber(["grace_hard_stop_days_before_departure"], 7)} days before departure.
                 </div>
               </div>
 
@@ -756,6 +756,30 @@ export default function OperationsDashboard() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+
+              <div className="ops-rule-section">
+                <div className="ops-rule-section-head">
+                  <h3>Post-travel settlement and cancellation</h3>
+                  <p>Set eligible post-travel balance limits and the platform cancellation deduction for every tier and route.</p>
+                </div>
+                <div className="ops-tier-table-wrap">
+                  <table className="ops-tier-table">
+                    <thead><tr><th>Tier</th><th>Post-travel max</th>{ROUTES.map((route) => <th key={`${route}-cancellation`}>{route} cancellation</th>)}</tr></thead>
+                    <tbody>
+                      {TIERS.map((tier) => (
+                        <tr key={`${tier}-billing`}>
+                          <th>{tier}</th>
+                          <td><input aria-label={`${tier} post-travel maximum percentage`} type="number" min="0" max="30" step="0.01" value={ruleNumber(["post_travel_rates", tier]) * 100} onChange={(event) => setRuleNumber(["post_travel_rates", tier], event.target.value, true)} /></td>
+                          {ROUTES.map((route) => <td key={`${tier}-${route}-cancellation`}><input aria-label={`${tier} ${route} cancellation percentage`} type="number" min="0.01" max={ruleNumber(["cancellation_fee_caps", route]) * 100} step="0.01" value={ruleNumber(["cancellation_rates", tier, route]) * 100} onChange={(event) => setRuleNumber(["cancellation_rates", tier, route], event.target.value, true)} /></td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="ops-policy-note">
+                  Airline penalties remain separate from Tripkopa cancellation deductions. Approved campaigns and promotional benefits are controlled in the advanced policy JSON; blanket discounts remain disabled.
                 </div>
               </div>
 

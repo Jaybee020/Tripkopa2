@@ -460,7 +460,7 @@ Before creating a quote, call the preflight endpoint with the identical body:
 POST /api/quotes/preflight
 ```
 
-Preflight runs the same offer resolution, KYC, trust-tier, route, cap, financing-window, installment, repayment-deadline, and amount checks as quote creation, but does not insert a quote. It also rejects post-travel rows because the current policy requires complete repayment before travel. Business-rule failures return HTTP `200` so agent runtimes do not terminate the conversation:
+Preflight runs the same offer resolution, KYC, trust-tier, route, cap, financing-window, installment, repayment-deadline, post-travel eligibility, and amount checks as quote creation, but does not insert a quote. Business-rule failures return HTTP `200` so agent runtimes do not terminate the conversation:
 
 ```json
 {
@@ -536,32 +536,29 @@ Do not send placeholder values for unknown optional fields. Omit `offer` instead
 
 If the provider response uses an unsupported price shape, the endpoint returns `400` with `offer_shape` and `result_shape` metadata. In that case, retry with a positive `base_amount` from the selected offer.
 
-Full-payment quotes apply a 5% service fee. Flexible quotes require departure at least 21 calendar days away and use the customer's trust tier, route category, financing window, marked-up-total cap, and versioned rules. Generated and custom schedules complete the entire outstanding balance 10 days before departure; post-travel settlement is disabled. The final repayment has at most 3 grace days, ending no later than 7 days before departure. The quote stores the complete plan under `details.pricing.repayment_plan`.
+Full-payment quotes apply a 5% service fee. Flexible quotes require departure at least 21 calendar days away and use the customer's trust tier, route category, financing window, marked-up-total cap, and versioned rules. Pre-travel repayments finish 10 days before departure; the final repayment has at most 3 grace days, ending no later than 7 days before departure. Voyager, Navigator, and Ambassador may carry at most 10%, 20%, and 30% respectively for settlement within 90 days after travel.
 
 ```json
 {
   "id": "quote-uuid",
   "status": "ACTIVE",
   "currency": "NGN",
-  "base_amount": "120000",
-  "total_amount": "129000",
-  "deposit_amount": "45150",
-  "installment_amount": "20962.50",
-  "rule_version": "flex_v3_2026_08",
+  "total_amount": "126000",
+  "deposit_amount": "44100",
+  "installment_amount": "20475",
   "expires_at": "2026-08-12T12:10:00.000Z",
-  "details": {
-    "booking_type": "flexible",
-    "pricing": {
-      "repayment_plan": {
-        "deposit_amount": 45150,
-        "plan_mode":"generated",
-        "frequency":"weekly",
-        "repayment_deadline":"2026-10-10",
-        "generated_deadline":"2026-10-06",
-        "installments": [
-          {"sequence_number":1,"due_date":"2026-09-15","amount":20962.50,"phase":"PRE_TRAVEL"}
-        ]
-      }
+  "booking_type": "flexible",
+  "pricing": {
+    "total_amount": 126000,
+    "deposit_amount": 44100,
+    "repayment_plan": {
+      "deposit_amount": 44100,
+      "plan_mode":"generated",
+      "frequency":"weekly",
+      "repayment_deadline":"2026-10-10",
+      "installments": [
+        {"sequence_number":1,"due_date":"2026-09-15","amount":20475,"phase":"PRE_TRAVEL"}
+      ]
     }
   }
 }
@@ -576,7 +573,7 @@ GET /api/flights/searches/{search_id}
 GET /api/quotes/{quote_id}
 ```
 
-Both return only a resource owned by the asserted customer. A quote includes at least `id`, `status`, `total_amount`, and `currency`, plus stored quote details and any repayment plan.
+Both return only a resource owned by the asserted customer. A quote includes its final payable amount and any repayment plan, but excludes base fare, service-fee calculations, markup, financing caps, behavioral adjustments, provider references, and internal rule snapshots.
 
 ### Revalidate a quote
 
@@ -719,7 +716,7 @@ Channel lists are comma-separated. `KYC_SUCCESS_NOTIFICATION_CHANNELS=EMAIL,WHAT
 GET /api/me/financing
 ```
 
-Returns the computed and effective public tier, successful cycles, lifetime on-time and reminder rates, KYC state, route-specific deposit rates and caps, the post-travel percentage (currently zero), schedule constraints, and the active rule version. Internal risk events and scoring inputs are not returned.
+Returns the computed and effective public tier, successful cycles, lifetime on-time and reminder rates, KYC state, route-specific deposit rates and caps, the tier's post-travel percentage, schedule constraints, and the active rule version. Internal risk events and scoring inputs are not returned. Post-travel maximums are 0% for Observer and Explorer, 10% for Voyager, 20% for Navigator, and 30% for Ambassador.
 
 ## Wallet, payments, and events
 
@@ -947,7 +944,7 @@ POST /api/operations/bookings/{booking_id}/cancel
 {"reason":"Flight no longer required"}
 ```
 
-The reason is required and limited to 500 characters. The handler changes the booking status to `CANCELLATION_PENDING`, echoes the reason in the response, and records an operations audit event. Provider cancellation/refund automation is still a separate workflow.
+The reason is required and limited to 500 characters. The handler changes the booking status to `CANCELLATION_PENDING`, snapshots the tier-and-route platform deduction, returns an estimate before airline penalties, and records an operations audit event. Airline penalties are explicitly separate and provider cancellation/refund automation remains a review workflow. Nonrefundable fares do not receive a refund estimate.
 
 ### Resolve a booking/case
 
@@ -973,7 +970,7 @@ PUT /api/operations/rules
 ```json
 {
   "value": {
-    "rule_version": "flex_v3_2026_08",
+    "rule_version": "pricing_v4_2026_09",
     "full_service_fee_rate": 0.05,
     "max_financing_weeks": {"domestic":12,"regional":16,"international":24},
     "max_installments": {"domestic":4,"regional":6,"international":8},
@@ -986,13 +983,16 @@ PUT /api/operations/rules
     "markup": "route bracket arrays",
     "deposit_rates": "tier-by-route matrix",
     "financing_caps": "tier-by-route matrix",
-    "post_travel_rates": "tier matrix"
+    "post_travel_rates": "tier matrix",
+    "cancellation_rates": "tier-by-route matrix",
+    "cancellation_fee_caps": {"domestic":0.20,"regional":0.20,"international":0.25},
+    "discount_policy": "approved campaign types and benefits; blanket discounts disabled"
   },
   "description": "Trust-based financing rules."
 }
 ```
 
-The value must contain the complete rule document; the abbreviated strings above represent the complete matrices returned by `GET`. Quotes read this live configuration and store an immutable snapshot. Every update must use a new `rule_version`; versions are recorded in `admin_rule_config_versions` and cannot be overwritten.
+The value must contain the complete rule document; the abbreviated strings above represent the complete matrices returned by `GET`. Quotes retain the applied `rule_version`; immutable full configurations are stored in `admin_rule_config_versions`, outside customer quote responses. Every update must use a new `rule_version` and cannot overwrite an existing version.
 
 ## Provider webhooks
 

@@ -68,8 +68,9 @@ Supabase session; the environment password is never returned to the client.
 
 The admin dashboard can manage flexible-plan markup, service fees, repayment
 timing, route windows, installment limits, tier deposits, financing caps,
-bookings, and reconciliation. Rule edits are versioned and audited. Apply all
-Supabase migrations before using the dashboard.
+post-travel allowances, cancellation deductions, discount policy, bookings, and
+reconciliation. Rule edits are versioned and audited. Apply all Supabase
+migrations before using the dashboard.
 
 ### Resolve or create a customer
 

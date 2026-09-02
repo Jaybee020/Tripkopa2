@@ -4,6 +4,7 @@ import { QuoteCreateInput } from "@/lib/api-contracts";
 import { requireAgentCustomer } from "@/lib/auth/agent";
 import { bad, failure } from "@/lib/api-utils";
 import { prepareQuote } from "@/lib/quote-preparation";
+import { toCustomerQuote, toStoredQuotePricing } from "@/lib/customer-pricing";
 
 export async function POST(request: Request) {
   try {
@@ -21,7 +22,6 @@ export async function POST(request: Request) {
       selectedOfferId,
       selectedOfferIndex,
       selectedSearchScope,
-      rules,
       pricing,
       fareRules,
     } = prepared;
@@ -68,9 +68,8 @@ export async function POST(request: Request) {
             ticket_type: search.ticket_type,
           },
           booking_type: input.booking_type,
-          pricing,
+          pricing: toStoredQuotePricing(pricing),
           fare_rules: fareRules,
-          rules_snapshot: rules,
           customer_summary: pricing.repayment_plan
             ? {
                 trust_tier: pricing.trust_tier,
@@ -87,7 +86,7 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
 
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(toCustomerQuote(data), { status: 201 });
   } catch (error) {
     return error instanceof z.ZodError ? bad(error) : failure(error);
   }
