@@ -257,7 +257,12 @@ export function priceQuote(input: QuotePricingInput): QuotePricing {
   }
   const weeks = weeksUntil(input.departureDate);
   const rate = markupRate(rules, category, weeks);
-  const total = roundMoney(input.baseAmount * (1 + rate));
+  const depositRate = rules.deposit_rates[tier][category];
+  const deposit = roundMoney(input.baseAmount * depositRate);
+  const financedBalance = roundMoney(input.baseAmount - deposit);
+  const financingCharge = roundMoney(financedBalance * rate);
+  const total = roundMoney(input.baseAmount + financingCharge);
+  const remaining = roundMoney(total - deposit);
   const financingCap = rules.financing_caps[tier][category];
   if (total > financingCap) {
     throw Object.assign(
@@ -265,9 +270,6 @@ export function priceQuote(input: QuotePricingInput): QuotePricing {
       { status: 422, code: "FINANCING_CAP_EXCEEDED", financing_cap: financingCap, total_amount: total },
     );
   }
-  const depositRate = rules.deposit_rates[tier][category];
-  const deposit = roundMoney(total * depositRate);
-  const remaining = roundMoney(total - deposit);
   const repaymentDeadline = addDays(departure, -rules.repayment_due_days_before_departure);
   const generatedDeadline = addDays(departure, -rules.generated_due_days_before_departure);
   const graceHardStop = addDays(departure, -rules.grace_hard_stop_days_before_departure);

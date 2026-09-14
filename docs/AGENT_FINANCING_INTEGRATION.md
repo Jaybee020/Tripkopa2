@@ -82,7 +82,7 @@ No request body is required.
     "grace_period_days": 3,
     "grace_hard_stop_days_before_departure": 7
   },
-  "rule_version": "pricing_v4_2026_09"
+  "rule_version": "pricing_v5_2026_09"
 }
 ```
 

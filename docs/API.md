@@ -536,23 +536,23 @@ Do not send placeholder values for unknown optional fields. Omit `offer` instead
 
 If the provider response uses an unsupported price shape, the endpoint returns `400` with `offer_shape` and `result_shape` metadata. In that case, retry with a positive `base_amount` from the selected offer.
 
-Full-payment quotes apply a 5% service fee. Flexible quotes require departure at least 21 calendar days away and use the customer's trust tier, route category, financing window, marked-up-total cap, and versioned rules. Pre-travel repayments finish 10 days before departure; the final repayment has at most 3 grace days, ending no later than 7 days before departure. Voyager, Navigator, and Ambassador may carry at most 10%, 20%, and 30% respectively for settlement within 90 days after travel.
+Full-payment quotes apply a 5% service fee. For flexible quotes, the tier deposit is calculated from the base fare first; the financing markup is then applied only to the remaining post-deposit balance. Flexible quotes require departure at least 21 calendar days away and use the customer's trust tier, route category, financing window, total-payable cap, and versioned rules. Pre-travel repayments finish 10 days before departure; the final repayment has at most 3 grace days, ending no later than 7 days before departure. Voyager, Navigator, and Ambassador may carry at most 10%, 20%, and 30% respectively for settlement within 90 days after travel.
 
 ```json
 {
   "id": "quote-uuid",
   "status": "ACTIVE",
   "currency": "NGN",
-  "total_amount": "126000",
-  "deposit_amount": "44100",
+  "total_amount": "123900",
+  "deposit_amount": "42000",
   "installment_amount": "20475",
   "expires_at": "2026-08-12T12:10:00.000Z",
   "booking_type": "flexible",
   "pricing": {
-    "total_amount": 126000,
-    "deposit_amount": 44100,
+    "total_amount": 123900,
+    "deposit_amount": 42000,
     "repayment_plan": {
-      "deposit_amount": 44100,
+      "deposit_amount": 42000,
       "plan_mode":"generated",
       "frequency":"weekly",
       "repayment_deadline":"2026-10-10",
@@ -970,7 +970,7 @@ PUT /api/operations/rules
 ```json
 {
   "value": {
-    "rule_version": "pricing_v4_2026_09",
+    "rule_version": "pricing_v5_2026_09",
     "full_service_fee_rate": 0.05,
     "max_financing_weeks": {"domestic":12,"regional":16,"international":24},
     "max_installments": {"domestic":4,"regional":6,"international":8},
