@@ -17,6 +17,7 @@ import { normalizeFareRules } from "@/lib/ticket-rules";
 import { bad, failure } from "@/lib/api-utils";
 import { recoverProviderQuote } from "@/lib/quote-recovery";
 import { toCustomerQuote, toStoredQuotePricing } from "@/lib/customer-pricing";
+import { extractCompleteNgnFare } from "@/lib/flight-search-scope";
 
 type QuoteDetails = {
   offer?: unknown;
@@ -160,7 +161,10 @@ export async function POST(
       }
     }
 
-    const baseAmount = extractOfferAmount(provider) ?? Number(quote.base_amount);
+    const normalizedProviderAmount = extractCompleteNgnFare(provider);
+    const baseAmount = normalizedProviderAmount
+      ?? extractOfferAmount(provider)
+      ?? Number(quote.base_amount);
     const search = details.search;
     if (!search?.origin || !search.destination || !search.departure_date) {
       return NextResponse.json({ error: "Quote search details are incomplete" }, { status: 409 });
@@ -176,7 +180,9 @@ export async function POST(
         departureDate: search.departure_date,
         travelCompletionDate: search.return_date || search.departure_date,
         baseAmount,
-        currency: extractOfferCurrency(provider, quote.currency),
+        currency: normalizedProviderAmount
+          ? "NGN"
+          : extractOfferCurrency(provider, quote.currency),
         bookingType,
         trustTier: trust.effective_tier,
         rules,
@@ -203,7 +209,9 @@ export async function POST(
       .from("quotes")
       .update({
         details: nextDetails,
-        currency: extractOfferCurrency(provider, quote.currency),
+        currency: normalizedProviderAmount
+          ? "NGN"
+          : extractOfferCurrency(provider, quote.currency),
         base_amount: pricing.base_amount,
         total_amount: pricing.total_amount,
         deposit_amount: pricing.deposit_amount,

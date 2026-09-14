@@ -10,6 +10,8 @@ export type DateCombination = {
   return_date: string | null;
 };
 
+const SEARCH_PRICE_MARKUP_RATE = 0.025;
+
 export type OfferSearchMetadata = DateCombination & {
   offer_index: number;
   origin: string;
@@ -63,10 +65,15 @@ function currencyCode(value: unknown) {
     : null;
 }
 
+function customerSearchPrice(amount: number) {
+  return Number((amount * (1 + SEARCH_PRICE_MARKUP_RATE)).toFixed(2));
+}
+
 /**
- * Extract only a complete party fare that can be proved to be NGN from the
- * provider payload. Component prices such as `price.base` are deliberately
- * excluded.
+ * Extract a complete customer-facing party fare that can be proved to be NGN.
+ * `flexiTotal` already contains the provider's 2.5% addition. Other complete
+ * fare fields do not, so normalize those fallbacks before exposing them.
+ * Component prices such as `price.base` are deliberately excluded.
  */
 export function extractCompleteNgnFare(offer: unknown): number | null {
   const price = record(atPath(offer, ["price"]))
@@ -89,20 +96,20 @@ export function extractCompleteNgnFare(offer: unknown): number | null {
 
   const convertedPrice = positiveNumber(conversion?.convertedPrice);
   if (convertedPrice && conversionTargetsNgn) {
-    return Number(convertedPrice.toFixed(2));
+    return customerSearchPrice(convertedPrice);
   }
 
   const completeSourceAmount = positiveNumber(price.grandTotal)
     ?? positiveNumber(price.total)
     ?? positiveNumber(offerObject.total);
   if (!completeSourceAmount) return null;
-  if (sourceCurrency === "NGN") return Number(completeSourceAmount.toFixed(2));
+  if (sourceCurrency === "NGN") return customerSearchPrice(completeSourceAmount);
 
   const conversionRate = sourceCurrency
     ? positiveNumber(rates?.[sourceCurrency])
     : null;
   if (!conversionTargetsNgn || !conversionRate) return null;
-  return Number((completeSourceAmount * conversionRate).toFixed(2));
+  return customerSearchPrice(completeSourceAmount * conversionRate);
 }
 
 function addUtcDays(date: string, days: number) {
@@ -171,6 +178,37 @@ function deduplicationKey(
       departure_date: scope.departure_date,
       return_date: scope.return_date,
     });
+}
+
+export function offerMetadataForSearch(search: {
+  origin: string;
+  destination: string;
+  departure_date: string;
+  return_date: string | null;
+  direct: boolean;
+  provider_result: Record<string, unknown>;
+}) {
+  return listOffers(search.provider_result).flatMap((offer, offerIndex) => {
+    const ngnTotal = extractCompleteNgnFare(offer);
+    if (!ngnTotal) return [];
+    const endpoints = itineraryEndpoints(offer);
+    return [{
+      offer_index: offerIndex,
+      origin: endpoints?.origin ?? search.origin,
+      destination: endpoints?.destination ?? search.destination,
+      searched_origin_code: search.origin,
+      searched_destination_code: search.destination,
+      departure_date: endpoints?.departure_date ?? search.departure_date,
+      return_date: endpoints?.return_date ?? search.return_date,
+      searched_departure_date: search.departure_date,
+      searched_return_date: search.return_date,
+      trip_type: search.return_date ? "return" as const : "one_way" as const,
+      direct: itineraryIsDirect(offer) ?? search.direct,
+      ngn_total: ngnTotal,
+      currency: "NGN" as const,
+      price_scope: "party_total" as const,
+    }];
+  });
 }
 
 export function rankFlexibleOffers(searches: Array<{
@@ -242,7 +280,10 @@ export function searchMetadataFromResults(results: unknown): SearchMetadata | nu
 export function offerSearchMetadata(results: unknown, offerIndex: number) {
   const object = record(results);
   if (!Array.isArray(object?.offer_metadata)) return null;
-  const metadata = record(object.offer_metadata[offerIndex]);
+  const metadata = object.offer_metadata
+    .map(record)
+    .find((item) => item?.offer_index === offerIndex)
+    ?? record(object.offer_metadata[offerIndex]);
   if (!metadata) return null;
   const origin = typeof metadata.origin === "string" ? metadata.origin : null;
   const destination = typeof metadata.destination === "string"

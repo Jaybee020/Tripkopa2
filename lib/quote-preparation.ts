@@ -11,7 +11,10 @@ import {
 import { loadFinancingRules } from "@/lib/financing-rules";
 import { refreshCustomerTrustTier } from "@/lib/trust-financing";
 import { normalizeFareRules } from "@/lib/ticket-rules";
-import { offerSearchMetadata } from "@/lib/flight-search-scope";
+import {
+  extractCompleteNgnFare,
+  offerSearchMetadata,
+} from "@/lib/flight-search-scope";
 import { assertFlightRouteAvailable } from "@/lib/airport-regions";
 
 export function resultShape(value: unknown) {
@@ -99,9 +102,11 @@ export async function prepareQuote(input: {
     selectedSearchScope.origin,
     selectedSearchScope.destination,
   );
+  const normalizedOfferAmount = extractCompleteNgnFare(offer);
   const baseAmount =
-    quote.base_amount ??
     selectedSearchScope.ngn_total ??
+    normalizedOfferAmount ??
+    quote.base_amount ??
     extractOfferAmount(offer) ??
     extractOfferAmount(search.results);
   if (!baseAmount) {
@@ -113,7 +118,7 @@ export async function prepareQuote(input: {
     });
   }
 
-  const currency = selectedSearchScope.ngn_total
+  const currency = selectedSearchScope.ngn_total || normalizedOfferAmount
     ? "NGN"
     : extractOfferCurrency(offer, quote.currency);
   const rules = await loadFinancingRules(supabase);

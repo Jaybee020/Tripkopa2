@@ -12,6 +12,10 @@ import { taketrips } from "@/lib/services/taketrips";
 import { filterSearchResultsByTicketType, normalizeFareRules } from "@/lib/ticket-rules";
 import { refreshCustomerTrustTier } from "@/lib/trust-financing";
 import { toCustomerQuote, toStoredQuotePricing } from "@/lib/customer-pricing";
+import {
+  extractCompleteNgnFare,
+  offerMetadataForSearch,
+} from "@/lib/flight-search-scope";
 
 type QuoteRow = Record<string, unknown> & {
   id: string;
@@ -168,6 +172,17 @@ export async function recoverProviderQuote(input: {
     allProviders,
   });
   const refreshedResults = filterSearchResultsByTicketType(providerResults, ticketType);
+  const customerFacingResults = {
+    ...refreshedResults,
+    offer_metadata: offerMetadataForSearch({
+      origin: selectedScope.origin,
+      destination: selectedScope.destination,
+      departure_date: selectedScope.departure_date,
+      return_date: selectedScope.return_date,
+      direct,
+      provider_result: refreshedResults,
+    }),
+  };
   const { data: newSearch, error: newSearchError } = await supabase
     .from("flight_searches")
     .insert({
@@ -186,7 +201,7 @@ export async function recoverProviderQuote(input: {
       all_providers: allProviders,
       ticket_type: ticketType,
       status: "COMPLETED",
-      results: refreshedResults,
+      results: customerFacingResults,
     })
     .select("*")
     .single();
@@ -208,7 +223,7 @@ export async function recoverProviderQuote(input: {
       recovery_reason: "ORIGINAL_FLIGHT_UNAVAILABLE",
       previous_quote_id: quote.id,
       search_id: newSearch.id,
-      alternatives: refreshedResults,
+      alternatives: customerFacingResults,
       offer_count: listOffers(refreshedResults).length,
     };
   }
@@ -226,13 +241,18 @@ export async function recoverProviderQuote(input: {
       recovery_reason: "MATCHED_OFFER_VALIDATION_FAILED",
       previous_quote_id: quote.id,
       search_id: newSearch.id,
-      alternatives: refreshedResults,
+      alternatives: customerFacingResults,
       offer_count: listOffers(refreshedResults).length,
       provider_error: error instanceof Error ? error.message : String(error),
     };
   }
 
-  const baseAmount = extractOfferAmount(validatedOffer) ?? extractOfferAmount(match.offer);
+  const normalizedValidatedAmount = extractCompleteNgnFare(validatedOffer);
+  const normalizedMatchedAmount = extractCompleteNgnFare(match.offer);
+  const baseAmount = normalizedValidatedAmount
+    ?? normalizedMatchedAmount
+    ?? extractOfferAmount(validatedOffer)
+    ?? extractOfferAmount(match.offer);
   if (!baseAmount) throw Object.assign(new Error("Recovered offer does not contain a valid price"), { status: 502 });
   const bookingType = details.booking_type === "flexible" ? "flexible" : "full";
   if (bookingType === "flexible") {
@@ -268,7 +288,9 @@ export async function recoverProviderQuote(input: {
       departureDate: selectedScope.departure_date,
       travelCompletionDate: selectedScope.return_date || selectedScope.departure_date,
       baseAmount,
-      currency: extractOfferCurrency(validatedOffer, quote.currency),
+      currency: normalizedValidatedAmount || normalizedMatchedAmount
+        ? "NGN"
+        : extractOfferCurrency(validatedOffer, quote.currency),
       bookingType,
       trustTier: trust.effective_tier,
       rules,
@@ -358,7 +380,9 @@ export async function recoverProviderQuote(input: {
       search_id: newSearch.id,
       provider: quote.provider,
       provider_reference: crypto.randomUUID(),
-      currency: extractOfferCurrency(validatedOffer, quote.currency),
+      currency: normalizedValidatedAmount || normalizedMatchedAmount
+        ? "NGN"
+        : extractOfferCurrency(validatedOffer, quote.currency),
       base_amount: pricing.base_amount,
       total_amount: pricing.total_amount,
       deposit_amount: pricing.deposit_amount,

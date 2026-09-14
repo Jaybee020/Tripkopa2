@@ -6,6 +6,7 @@ import { taketrips } from "@/lib/services/taketrips";
 import { filterSearchResultsByTicketType } from "@/lib/ticket-rules";
 import {
   explainableSearchResponse,
+  offerMetadataForSearch,
   travellerSummary,
 } from "@/lib/flight-search-scope";
 import { bad, failure } from "@/lib/api-utils";
@@ -61,6 +62,14 @@ export async function POST(request: Request) {
     };
     const results = {
       ...filteredResults,
+      offer_metadata: offerMetadataForSearch({
+        origin: input.origin,
+        destination: input.destination,
+        departure_date: input.departure_date,
+        return_date: input.return_date || null,
+        direct: input.direct,
+        provider_result: filteredResults,
+      }),
       search_metadata: searchMetadata,
     };
     const { data, error } = await supabase

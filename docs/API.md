@@ -402,6 +402,10 @@ Every search response also returns `requested_scope`, `completed_scope`,
 `price_scope: "party_total"`, `traveller_summary`,
 `date_combinations_searched`, and `is_complete`. These fields are persisted in
 `results.search_metadata` and promoted to the top level on create and read.
+Each offer also has an `offer_metadata` entry whose `ngn_total` is the
+customer-facing party total. The backend uses the provider's `flexiTotal` when
+available because it already includes the 2.5% search-price addition; otherwise
+the backend adds 2.5% exactly once to a verified complete NGN fare.
 
 ### Search flexible dates
 
@@ -970,7 +974,7 @@ PUT /api/operations/rules
 ```json
 {
   "value": {
-    "rule_version": "pricing_v5_2026_09",
+    "rule_version": "pricing_v6_2026_09",
     "full_service_fee_rate": 0.05,
     "max_financing_weeks": {"domestic":12,"regional":16,"international":24},
     "max_installments": {"domestic":4,"regional":6,"international":8},
