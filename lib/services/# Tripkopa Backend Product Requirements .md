@@ -1872,7 +1872,7 @@ All percentages, limits and booking windows are configurable, effective-dated an
 ### 9.1 Standard payment
 
 - Customer pays the complete amount before ticket issuance.
-- Default Tripkopa service fee: 5%.
+- Default Tripkopa service fee: 2.5%, included in the flight search total.
 - The exact customer total and applicable disclosures are saved with the quote version.
 
 ### 9.2 Flexible-payment markup defaults

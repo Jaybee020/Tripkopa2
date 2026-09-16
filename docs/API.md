@@ -403,9 +403,10 @@ Every search response also returns `requested_scope`, `completed_scope`,
 `date_combinations_searched`, and `is_complete`. These fields are persisted in
 `results.search_metadata` and promoted to the top level on create and read.
 Each offer also has an `offer_metadata` entry whose `ngn_total` is the
-customer-facing party total. The backend uses the provider's `flexiTotal` when
-available because it already includes the 2.5% search-price addition; otherwise
-the backend adds 2.5% exactly once to a verified complete NGN fare.
+customer-facing party total, including the 2.5% Tripkopa service fee. The backend
+prefers a verified complete provider fare and adds the service fee once. If only
+the provider's `flexiTotal` is available, it normalizes that field's existing
+2.5% addition into the service-fee-inclusive total.
 
 ### Search flexible dates
 
@@ -538,9 +539,9 @@ Fields:
 
 Do not send placeholder values for unknown optional fields. Omit `offer` instead of sending `{}`, omit `base_amount` instead of sending `0`, and omit `installment_count` instead of sending `0`. The backend treats those placeholder values as omitted, then attempts to use the selected stored offer.
 
-If the provider response uses an unsupported price shape, the endpoint returns `400` with `offer_shape` and `result_shape` metadata. In that case, retry with a positive `base_amount` from the selected offer.
+If the provider response uses an unsupported price shape, the endpoint returns `400` with `offer_shape` and `result_shape` metadata. In that case, retry with a positive NGN `base_amount` that already includes the service fee for the selected offer.
 
-Full-payment quotes apply a 5% service fee. For flexible quotes, the tier deposit is calculated from the base fare first; the financing markup is then applied only to the remaining post-deposit balance. Flexible quotes require departure at least 21 calendar days away and use the customer's trust tier, route category, financing window, total-payable cap, and versioned rules. Pre-travel repayments finish 10 days before departure; the final repayment has at most 3 grace days, ending no later than 7 days before departure. Voyager, Navigator, and Ambassador may carry at most 10%, 20%, and 30% respectively for settlement within 90 days after travel.
+The search total already includes the 2.5% service fee, so a full-payment quote uses that same total without another fee. For flexible quotes, the tier deposit is calculated from the search total first; the financing markup is then applied only to the remaining post-deposit balance. Flexible quotes require departure at least 21 calendar days away and use the customer's trust tier, route category, financing window, total-payable cap, and versioned rules. Pre-travel repayments finish 10 days before departure; the final repayment has at most 3 grace days, ending no later than 7 days before departure. Voyager, Navigator, and Ambassador may carry at most 10%, 20%, and 30% respectively for settlement within 90 days after travel.
 
 ```json
 {
@@ -975,7 +976,7 @@ PUT /api/operations/rules
 {
   "value": {
     "rule_version": "pricing_v6_2026_09",
-    "full_service_fee_rate": 0.05,
+    "full_service_fee_rate": 0.025,
     "max_financing_weeks": {"domestic":12,"regional":16,"international":24},
     "max_installments": {"domestic":4,"regional":6,"international":8},
     "minimum_days_before_departure": 21,

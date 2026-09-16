@@ -12,6 +12,7 @@ import { bad, failure } from "@/lib/api-utils";
 import { taketrips } from "@/lib/services/taketrips";
 import { filterSearchResultsByTicketType } from "@/lib/ticket-rules";
 import { assertFlightRouteAvailable } from "@/lib/airport-regions";
+import { loadFinancingRules } from "@/lib/financing-rules";
 
 const SEARCH_CONCURRENCY = 5;
 const MAX_SEARCH_REQUESTS = 225;
@@ -100,7 +101,8 @@ export async function POST(request: Request) {
       ))
     ));
     const isComplete = completedSearches.length === tasks.length;
-    const ranked = rankFlexibleOffers(completedSearches);
+    const rules = await loadFinancingRules(supabase);
+    const ranked = rankFlexibleOffers(completedSearches, 5, rules.full_service_fee_rate);
     const requestedScope = {
       origin_codes: input.origin_codes,
       destination: input.destination,

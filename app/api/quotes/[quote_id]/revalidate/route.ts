@@ -4,8 +4,6 @@ import { QuoteRevalidationInput } from "@/lib/api-contracts";
 import { requireAgentCustomer } from "@/lib/auth/agent";
 import { taketrips } from "@/lib/services/taketrips";
 import {
-  extractOfferAmount,
-  extractOfferCurrency,
   getOfferId,
   priceQuote,
   selectOffer,
@@ -161,16 +159,20 @@ export async function POST(
       }
     }
 
-    const normalizedProviderAmount = extractCompleteNgnFare(provider);
-    const baseAmount = normalizedProviderAmount
-      ?? extractOfferAmount(provider)
-      ?? Number(quote.base_amount);
+    const rules = await loadFinancingRules(supabase);
+    const normalizedProviderAmount = extractCompleteNgnFare(provider, rules.full_service_fee_rate);
+    if (!normalizedProviderAmount) {
+      await supabase.from("quotes").update({ status: "REPRICE_REQUIRED" }).eq("id", quote_id).eq("customer_id", customer.id);
+      return NextResponse.json(
+        { error: "Provider validation did not return a complete NGN fare", status: "REPRICE_REQUIRED" },
+        { status: 409 },
+      );
+    }
     const search = details.search;
     if (!search?.origin || !search.destination || !search.departure_date) {
       return NextResponse.json({ error: "Quote search details are incomplete" }, { status: 409 });
     }
     const bookingType = details.booking_type === "flexible" ? "flexible" : "full";
-    const rules = await loadFinancingRules(supabase);
     const trust = await refreshCustomerTrustTier(supabase, customer.id);
     let pricing;
     try {
@@ -179,10 +181,8 @@ export async function POST(
         destination: search.destination,
         departureDate: search.departure_date,
         travelCompletionDate: search.return_date || search.departure_date,
-        baseAmount,
-        currency: normalizedProviderAmount
-          ? "NGN"
-          : extractOfferCurrency(provider, quote.currency),
+        baseAmount: normalizedProviderAmount,
+        currency: "NGN",
         bookingType,
         trustTier: trust.effective_tier,
         rules,
@@ -209,9 +209,7 @@ export async function POST(
       .from("quotes")
       .update({
         details: nextDetails,
-        currency: normalizedProviderAmount
-          ? "NGN"
-          : extractOfferCurrency(provider, quote.currency),
+        currency: "NGN",
         base_amount: pricing.base_amount,
         total_amount: pricing.total_amount,
         deposit_amount: pricing.deposit_amount,

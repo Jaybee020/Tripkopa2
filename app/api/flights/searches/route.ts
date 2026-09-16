@@ -11,6 +11,7 @@ import {
 } from "@/lib/flight-search-scope";
 import { bad, failure } from "@/lib/api-utils";
 import { assertFlightRouteAvailable } from "@/lib/airport-regions";
+import { loadFinancingRules } from "@/lib/financing-rules";
 
 export async function POST(request: Request) {
   try {
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
       allProviders: input.all_providers,
     });
     const filteredResults = filterSearchResultsByTicketType(provider, input.ticket_type);
+    const rules = await loadFinancingRules(supabase);
     const requestedScope = {
       origin_codes: [input.origin.toUpperCase()],
       destination: input.destination.toUpperCase(),
@@ -69,7 +71,7 @@ export async function POST(request: Request) {
         return_date: input.return_date || null,
         direct: input.direct,
         provider_result: filteredResults,
-      }),
+      }, rules.full_service_fee_rate),
       search_metadata: searchMetadata,
     };
     const { data, error } = await supabase

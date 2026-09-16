@@ -52,8 +52,8 @@ export type FinancingRules = {
 };
 
 export const DEFAULT_FINANCING_RULES: FinancingRules = {
-  rule_version: "pricing_v6_2026_09",
-  full_service_fee_rate: 0.05,
+  rule_version: "pricing_v7_2026_09",
+  full_service_fee_rate: 0.025,
   markup: {
     domestic: [[5, 0.05], [9, 0.075], [12, 0.1]],
     regional: [[5, 0.05], [9, 0.075], [13, 0.1], [16, 0.15]],

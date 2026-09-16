@@ -1,7 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  extractOfferAmount,
-  extractOfferCurrency,
   listOffers,
   priceQuote,
   type RepaymentPlanRequest,
@@ -152,6 +150,7 @@ export async function recoverProviderQuote(input: {
     departure_date: details.search?.departure_date || search.departure_date,
     return_date: details.search?.return_date ?? search.return_date,
   };
+  const rules = await loadFinancingRules(supabase);
   const adultCount = search.adult_count || Math.max(search.passenger_count || 1, 1);
   const childrenCount = search.children_count || 0;
   const infantCount = search.infant_count || 0;
@@ -181,7 +180,7 @@ export async function recoverProviderQuote(input: {
       return_date: selectedScope.return_date,
       direct,
       provider_result: refreshedResults,
-    }),
+    }, rules.full_service_fee_rate),
   };
   const { data: newSearch, error: newSearchError } = await supabase
     .from("flight_searches")
@@ -247,13 +246,23 @@ export async function recoverProviderQuote(input: {
     };
   }
 
-  const normalizedValidatedAmount = extractCompleteNgnFare(validatedOffer);
-  const normalizedMatchedAmount = extractCompleteNgnFare(match.offer);
-  const baseAmount = normalizedValidatedAmount
-    ?? normalizedMatchedAmount
-    ?? extractOfferAmount(validatedOffer)
-    ?? extractOfferAmount(match.offer);
-  if (!baseAmount) throw Object.assign(new Error("Recovered offer does not contain a valid price"), { status: 502 });
+  const normalizedValidatedAmount = extractCompleteNgnFare(validatedOffer, rules.full_service_fee_rate);
+  const normalizedMatchedAmount = extractCompleteNgnFare(match.offer, rules.full_service_fee_rate);
+  const baseAmount = normalizedValidatedAmount ?? normalizedMatchedAmount;
+  if (!baseAmount) {
+    await markRecoveryAttempt(supabase, quote.id, customerId, {
+      status: "REPRICE_REQUIRED",
+      recovery_reason: "RECOVERED_FARE_UNVERIFIABLE",
+    });
+    return {
+      status: "ALTERNATIVES_REQUIRED",
+      recovery_reason: "RECOVERED_FARE_UNVERIFIABLE",
+      previous_quote_id: quote.id,
+      search_id: newSearch.id,
+      alternatives: customerFacingResults,
+      offer_count: listOffers(refreshedResults).length,
+    };
+  }
   const bookingType = details.booking_type === "flexible" ? "flexible" : "full";
   if (bookingType === "flexible") {
     const { data: kyc, error: kycError } = await supabase
@@ -278,7 +287,6 @@ export async function recoverProviderQuote(input: {
     }
   }
 
-  const rules = await loadFinancingRules(supabase);
   const trust = await refreshCustomerTrustTier(supabase, customerId);
   let pricing;
   try {
@@ -288,9 +296,7 @@ export async function recoverProviderQuote(input: {
       departureDate: selectedScope.departure_date,
       travelCompletionDate: selectedScope.return_date || selectedScope.departure_date,
       baseAmount,
-      currency: normalizedValidatedAmount || normalizedMatchedAmount
-        ? "NGN"
-        : extractOfferCurrency(validatedOffer, quote.currency),
+      currency: "NGN",
       bookingType,
       trustTier: trust.effective_tier,
       rules,
@@ -380,9 +386,7 @@ export async function recoverProviderQuote(input: {
       search_id: newSearch.id,
       provider: quote.provider,
       provider_reference: crypto.randomUUID(),
-      currency: normalizedValidatedAmount || normalizedMatchedAmount
-        ? "NGN"
-        : extractOfferCurrency(validatedOffer, quote.currency),
+      currency: "NGN",
       base_amount: pricing.base_amount,
       total_amount: pricing.total_amount,
       deposit_amount: pricing.deposit_amount,

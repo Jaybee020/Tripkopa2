@@ -412,7 +412,7 @@ Do not reveal internal BVN or KYC purposes such as behavioural scoring or repaym
 
 ### Standard Payment
 
-Standard payment quotes include Tripkopa's internal 5% service fee. The backend applies this fee.
+Flight search totals already include Tripkopa's 2.5% service fee. Standard payment quotes use that total without adding the fee again.
 
 Customer sees only:
 - total payable amount

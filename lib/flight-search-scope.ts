@@ -1,4 +1,5 @@
 import { extractOfferCurrency, listOffers } from "@/lib/flexible-payments";
+import { DEFAULT_FINANCING_RULES } from "@/lib/financing-rules";
 import {
   itineraryEndpoints,
   itineraryFingerprint,
@@ -9,8 +10,6 @@ export type DateCombination = {
   departure_date: string;
   return_date: string | null;
 };
-
-const SEARCH_PRICE_MARKUP_RATE = 0.025;
 
 export type OfferSearchMetadata = DateCombination & {
   offer_index: number;
@@ -65,17 +64,20 @@ function currencyCode(value: unknown) {
     : null;
 }
 
-function customerSearchPrice(amount: number) {
-  return Number((amount * (1 + SEARCH_PRICE_MARKUP_RATE)).toFixed(2));
+function customerSearchPrice(amount: number, serviceFeeRate: number) {
+  return Number((amount * (1 + serviceFeeRate)).toFixed(2));
 }
 
 /**
- * Extract a complete customer-facing party fare that can be proved to be NGN.
- * `flexiTotal` already contains the provider's 2.5% addition. Other complete
- * fare fields do not, so normalize those fallbacks before exposing them.
+ * Extract a complete NGN party fare with the full-payment service fee included.
+ * Prefer the provider's unmarked complete total. `flexiTotal` is a fallback
+ * because the provider already includes a 2.5% addition in that field.
  * Component prices such as `price.base` are deliberately excluded.
  */
-export function extractCompleteNgnFare(offer: unknown): number | null {
+export function extractCompleteNgnFare(
+  offer: unknown,
+  serviceFeeRate = DEFAULT_FINANCING_RULES.full_service_fee_rate,
+): number | null {
   const price = record(atPath(offer, ["price"]))
     ?? record(atPath(offer, ["details", "price"]));
   const offerObject = record(offer);
@@ -89,27 +91,29 @@ export function extractCompleteNgnFare(offer: unknown): number | null {
   const conversionTargetsNgn = currencyCode(conversion?.to) === "NGN"
     || currencyCode(rates?.BASE) === "NGN";
 
-  const flexiTotal = positiveNumber(price.flexiTotal);
-  if (flexiTotal && (sourceCurrency === "NGN" || conversionTargetsNgn)) {
-    return Number(flexiTotal.toFixed(2));
-  }
-
   const convertedPrice = positiveNumber(conversion?.convertedPrice);
   if (convertedPrice && conversionTargetsNgn) {
-    return customerSearchPrice(convertedPrice);
+    return customerSearchPrice(convertedPrice, serviceFeeRate);
   }
 
   const completeSourceAmount = positiveNumber(price.grandTotal)
     ?? positiveNumber(price.total)
     ?? positiveNumber(offerObject.total);
-  if (!completeSourceAmount) return null;
-  if (sourceCurrency === "NGN") return customerSearchPrice(completeSourceAmount);
+  if (completeSourceAmount) {
+    if (sourceCurrency === "NGN") return customerSearchPrice(completeSourceAmount, serviceFeeRate);
+    const conversionRate = sourceCurrency
+      ? positiveNumber(rates?.[sourceCurrency])
+      : null;
+    if (conversionTargetsNgn && conversionRate) {
+      return customerSearchPrice(completeSourceAmount * conversionRate, serviceFeeRate);
+    }
+  }
 
-  const conversionRate = sourceCurrency
-    ? positiveNumber(rates?.[sourceCurrency])
-    : null;
-  if (!conversionTargetsNgn || !conversionRate) return null;
-  return customerSearchPrice(completeSourceAmount * conversionRate);
+  const flexiTotal = positiveNumber(price.flexiTotal);
+  if (flexiTotal && (sourceCurrency === "NGN" || conversionTargetsNgn)) {
+    return customerSearchPrice(flexiTotal / 1.025, serviceFeeRate);
+  }
+  return null;
 }
 
 function addUtcDays(date: string, days: number) {
@@ -187,9 +191,9 @@ export function offerMetadataForSearch(search: {
   return_date: string | null;
   direct: boolean;
   provider_result: Record<string, unknown>;
-}) {
+}, serviceFeeRate = DEFAULT_FINANCING_RULES.full_service_fee_rate) {
   return listOffers(search.provider_result).flatMap((offer, offerIndex) => {
-    const ngnTotal = extractCompleteNgnFare(offer);
+    const ngnTotal = extractCompleteNgnFare(offer, serviceFeeRate);
     if (!ngnTotal) return [];
     const endpoints = itineraryEndpoints(offer);
     return [{
@@ -218,7 +222,7 @@ export function rankFlexibleOffers(searches: Array<{
   return_date: string | null;
   direct: boolean;
   provider_result: Record<string, unknown>;
-}>, limit = 5) {
+}>, limit = 5, serviceFeeRate = DEFAULT_FINANCING_RULES.full_service_fee_rate) {
   const cheapestByFlight = new Map<string, {
     offer: unknown;
     ngn_total: number;
@@ -227,7 +231,7 @@ export function rankFlexibleOffers(searches: Array<{
 
   for (const search of searches) {
     for (const offer of listOffers(search.provider_result)) {
-      const ngnTotal = extractCompleteNgnFare(offer);
+      const ngnTotal = extractCompleteNgnFare(offer, serviceFeeRate);
       if (!ngnTotal) continue;
       const endpoints = itineraryEndpoints(offer);
       const scope = {

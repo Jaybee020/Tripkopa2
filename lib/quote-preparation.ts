@@ -1,8 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { QuoteCreateInput } from "@/lib/api-contracts";
 import {
-  extractOfferAmount,
-  extractOfferCurrency,
   getOfferId,
   listOffers,
   priceQuote,
@@ -102,15 +100,11 @@ export async function prepareQuote(input: {
     selectedSearchScope.origin,
     selectedSearchScope.destination,
   );
-  const normalizedOfferAmount = extractCompleteNgnFare(offer);
-  const baseAmount =
-    selectedSearchScope.ngn_total ??
-    normalizedOfferAmount ??
-    quote.base_amount ??
-    extractOfferAmount(offer) ??
-    extractOfferAmount(search.results);
+  const rules = await loadFinancingRules(supabase);
+  const normalizedOfferAmount = extractCompleteNgnFare(offer, rules.full_service_fee_rate);
+  const baseAmount = selectedSearchScope.ngn_total ?? normalizedOfferAmount ?? quote.base_amount;
   if (!baseAmount) {
-    throw Object.assign(new Error("Unable to determine offer price; pass base_amount"), {
+    throw Object.assign(new Error("Unable to determine a complete NGN offer price"), {
       status: 400,
       code: "OFFER_PRICE_REQUIRED",
       offer_shape: resultShape(offer),
@@ -118,10 +112,7 @@ export async function prepareQuote(input: {
     });
   }
 
-  const currency = selectedSearchScope.ngn_total || normalizedOfferAmount
-    ? "NGN"
-    : extractOfferCurrency(offer, quote.currency);
-  const rules = await loadFinancingRules(supabase);
+  const currency = "NGN";
   // Snapshot the effective tier for both payment types because cancellation
   // deductions are tier-based even when the fare was paid in full.
   const trust = await refreshCustomerTrustTier(supabase, customerId);

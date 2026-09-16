@@ -223,7 +223,7 @@ export function priceQuote(input: QuotePricingInput): QuotePricing {
   if (input.bookingType === "full") {
     return {
       base_amount: roundMoney(input.baseAmount),
-      total_amount: roundMoney(input.baseAmount * (1 + rules.full_service_fee_rate)),
+      total_amount: roundMoney(input.baseAmount),
       deposit_amount: null,
       installment_amount: null,
       rule_version: rules.rule_version,
