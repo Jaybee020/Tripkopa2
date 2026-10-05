@@ -5,12 +5,14 @@ import {
   AlertTriangle,
   ArrowUpRight,
   Bell,
+  Banknote,
   Check,
   Clock3,
   CreditCard,
   FileSearch,
   Filter,
   LayoutDashboard,
+  Landmark,
   ListChecks,
   LogOut,
   Menu,
@@ -22,12 +24,14 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   WalletCards,
+  Users,
   X,
   Zap,
 } from "lucide-react";
 import {
   getMe,
   getOperationsBookingById,
+  getOperationsOverview,
   getOperationsRules,
   listOperationsBookings,
   listOperationsReconciliation,
@@ -41,13 +45,14 @@ import type {
   CurrentUser,
   OperationsBookingDetail,
   OperationsBookingList,
+  OperationsOverview,
   OperationsRuleConfig,
   ReconciliationReport,
 } from "@/lib/api-contracts";
 
 type RecordValue = Record<string, unknown>;
 type QueueStatus = "Needs review" | "In progress" | "Resolved";
-type NavItem = "Overview" | "Bookings" | "Rules" | "Reconciliation";
+type NavItem = "Overview" | "Bookings" | "Customers" | "Deposits" | "Rules" | "Reconciliation";
 type RouteCategory = "domestic" | "regional" | "international";
 type TrustTier = "OBSERVER" | "EXPLORER" | "VOYAGER" | "NAVIGATOR" | "AMBASSADOR";
 
@@ -91,6 +96,38 @@ function ageFrom(value: unknown) {
   if (minutes < 60) return `${minutes} min`;
   if (minutes < 1440) return `${Math.floor(minutes / 60)} hr`;
   return `${Math.floor(minutes / 1440)} d`;
+}
+
+function dateTime(value: unknown) {
+  if (typeof value !== "string" || !value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("en-NG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
+}
+
+function customerName(value: unknown) {
+  const customer = asRecord(value);
+  const name = [customer.first_name, customer.middle_name, customer.last_name]
+    .map((part) => text(part, "").trim())
+    .filter(Boolean)
+    .join(" ");
+  return name || text(customer.email, text(customer.whatsapp_number, "Unnamed customer"));
+}
+
+function passengerName(value: unknown) {
+  const passenger = asRecord(value);
+  return [
+    passenger.title,
+    passenger.first_name || passenger.firstName,
+    passenger.middle_name || passenger.middleName,
+    passenger.last_name || passenger.lastName,
+  ]
+    .map((part) => text(part, "").trim())
+    .filter(Boolean)
+    .join(" ") || "Passenger";
 }
 
 function queueStatus(value: unknown): QueueStatus {
@@ -160,6 +197,7 @@ export default function OperationsDashboard() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [bookings, setBookings] = useState<OperationsBookingList | null>(null);
   const [reconciliation, setReconciliation] = useState<ReconciliationReport | null>(null);
+  const [overview, setOverview] = useState<OperationsOverview | null>(null);
   const [rules, setRules] = useState<OperationsRuleConfig | null>(null);
   const [me, setMe] = useState<CurrentUser | null>(null);
   const [query, setQuery] = useState("");
@@ -179,16 +217,18 @@ export default function OperationsDashboard() {
     if (showSpinner) setLoading(true);
     setError("");
     try {
-      const [bookingData, reconData, userData, ruleData] = await Promise.all([
+      const [bookingData, reconData, userData, ruleData, overviewData] = await Promise.all([
         listOperationsBookings(),
         listOperationsReconciliation(),
         getMe(),
         getOperationsRules(),
+        getOperationsOverview(),
       ]);
       setBookings(bookingData);
       setReconciliation(reconData);
       setMe(userData);
       setRules(ruleData);
+      setOverview(overviewData);
       setRulesJson(JSON.stringify(ruleData.value, null, 2));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load operations data.");
@@ -204,13 +244,15 @@ export default function OperationsDashboard() {
       listOperationsReconciliation(),
       getMe(),
       getOperationsRules(),
+      getOperationsOverview(),
     ])
-      .then(([bookingData, reconData, userData, ruleData]) => {
+      .then(([bookingData, reconData, userData, ruleData, overviewData]) => {
         if (!active) return;
         setBookings(bookingData);
         setReconciliation(reconData);
         setMe(userData);
         setRules(ruleData);
+        setOverview(overviewData);
         setRulesJson(JSON.stringify(ruleData.value, null, 2));
       })
       .catch((err) => {
@@ -249,6 +291,14 @@ export default function OperationsDashboard() {
   }, [selectedId]);
 
   const rows = useMemo(() => bookings?.bookings.map(asRecord) ?? [], [bookings]);
+  const customerRows = useMemo(
+    () => overview?.customers.map(asRecord) ?? [],
+    [overview],
+  );
+  const depositRows = useMemo(
+    () => overview?.deposits.map(asRecord) ?? [],
+    [overview],
+  );
   const filteredRows = useMemo(
     () =>
       rows.filter((booking) => {
@@ -258,6 +308,10 @@ export default function OperationsDashboard() {
           booking.booking_type,
           booking.status,
           booking.provider_reference,
+          customerName(booking.customer),
+          asRecord(booking.flight).origin,
+          asRecord(booking.flight).destination,
+          asRecord(booking.flight).carrier,
         ]
           .map((value) => text(value, ""))
           .join(" ")
@@ -272,10 +326,12 @@ export default function OperationsDashboard() {
 
   const openCount = rows.filter((booking) => queueStatus(booking.status) !== "Resolved").length;
   const reviewCount = rows.filter((booking) => REVIEW_STATUSES.has(text(booking.status, "").toUpperCase())).length;
-  const flexibleCount = rows.filter((booking) => text(booking.booking_type, "").toLowerCase() === "flexible").length;
   const displayName = text(asRecord(me?.user).email, "Operations staff");
   const selectedBooking = detail ? asRecord(detail.booking) : null;
   const selectedCustomer = detail ? asRecord(detail.customer) : null;
+  const selectedFlight = asRecord(selectedBooking?.flight);
+  const selectedWallet = detail ? asRecord(detail.wallet) : {};
+  const selectedAccount = detail ? asRecord(detail.virtual_account) : {};
   const ruleValue = asRecord(rules?.value);
   const draftRuleValue = useMemo(() => {
     try {
@@ -451,6 +507,8 @@ export default function OperationsDashboard() {
           {[
             ["Overview", LayoutDashboard],
             ["Bookings", FileSearch],
+            ["Customers", Users],
+            ["Deposits", Banknote],
             ["Rules", Settings2],
             ["Reconciliation", SlidersHorizontal],
           ].map(([label, Icon]) => (
@@ -465,6 +523,7 @@ export default function OperationsDashboard() {
               <Icon size={18} />
               <span>{label as string}</span>
               {label === "Bookings" && <b>{openCount}</b>}
+              {label === "Customers" && <b>{overview?.metrics.customers ?? 0}</b>}
             </button>
           ))}
         </nav>
@@ -534,12 +593,13 @@ export default function OperationsDashboard() {
           )}
 
           <section className="ops-metrics" aria-label="Operational metrics">
-            <Metric label="Open bookings" value={loading ? "-" : String(openCount)} detail="Non-terminal states" icon={FileSearch} tone="amber" />
-            <Metric label="Manual review" value={loading ? "-" : String(reviewCount)} detail="Actionable queue" icon={AlertTriangle} tone="red" />
-            <Metric label="Flexible plans" value={loading ? "-" : String(flexibleCount)} detail="Active history" icon={ListChecks} tone="blue" />
-            <Metric label="Reconciliation" value={loading ? "-" : String(reconciliation?.total ?? 0)} detail="Ledger records" icon={ShieldCheck} tone="green" />
+            <Metric label="Deposits received" value={loading ? "-" : money(overview?.metrics.total_deposited)} detail={`${overview?.metrics.successful_deposits ?? 0} successful transfers`} icon={Banknote} tone="green" />
+            <Metric label="Wallet balance" value={loading ? "-" : money(overview?.metrics.wallet_balance)} detail={`${money(overview?.metrics.unallocated_funds)} currently unallocated`} icon={WalletCards} tone="blue" />
+            <Metric label="Virtual accounts" value={loading ? "-" : String(overview?.metrics.active_virtual_accounts ?? 0)} detail={`${overview?.metrics.customers ?? 0} customers`} icon={Landmark} tone="blue" />
+            <Metric label="Open bookings" value={loading ? "-" : String(openCount)} detail={`${reviewCount} need attention`} icon={FileSearch} tone={reviewCount ? "red" : "amber"} />
           </section>
 
+          {(activeNav === "Overview" || activeNav === "Bookings") && (
           <section className="ops-dashboard-grid">
             <article className="ops-card ops-queue-card">
               <div className="ops-card-header">
@@ -570,11 +630,11 @@ export default function OperationsDashboard() {
                 <table className="ops-table">
                   <thead>
                     <tr>
-                      <th>Booking</th>
-                      <th>Type</th>
-                      <th>Paid / balance</th>
+                      <th>Booking / customer</th>
+                      <th>Flight</th>
+                      <th>Funding</th>
                       <th>Status</th>
-                      <th>Age</th>
+                      <th>Departure</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -585,21 +645,22 @@ export default function OperationsDashboard() {
                             <span className={`ops-severity ${queueStatus(booking.status) === "Needs review" ? "high" : queueStatus(booking.status) === "In progress" ? "medium" : ""}`} />
                             <strong>{text(booking.id).slice(0, 8)}</strong>
                           </div>
-                          <small>{text(booking.customer_id)}</small>
+                          <small>{customerName(booking.customer)}</small>
                         </td>
                         <td>
-                          <strong>{text(booking.booking_type)}</strong>
-                          <small>{money(booking.total_amount)}</small>
+                          <strong>{text(asRecord(booking.flight).origin)} → {text(asRecord(booking.flight).destination)}</strong>
+                          <small>{text(asRecord(booking.flight).carrier, text(asRecord(booking.flight).carrier_code))} · {text(asRecord(booking.flight).flight_number)} · {text(asRecord(booking.flight).trip_type)}</small>
                         </td>
                         <td>
-                          <strong>{money(booking.amount_paid)}</strong>
-                          <small>{money(booking.balance_amount)} balance</small>
+                          <strong>{money(booking.amount_paid)} paid</strong>
+                          <small>{money(booking.balance_amount)} due · {text(booking.booking_type)}</small>
                         </td>
                         <td>
                           <span className={`ops-status ${statusClass(booking.status)}`}>{text(booking.status)}</span>
                         </td>
                         <td>
-                          <span className="ops-age"><Clock3 size={13} />{ageFrom(booking.created_at)}</span>
+                          <strong>{dateTime(asRecord(booking.flight).departure_at || booking.departure_date)}</strong>
+                          <small>{ageFrom(booking.created_at)} old</small>
                         </td>
                       </tr>
                     ))}
@@ -649,6 +710,93 @@ export default function OperationsDashboard() {
               </article>
             </aside>
           </section>
+          )}
+
+          {activeNav === "Customers" && (
+            <section className="ops-card ops-data-panel">
+              <div className="ops-card-header">
+                <div>
+                  <span className="ops-card-kicker">Customer directory</span>
+                  <h2>Identity, KYC, wallets and accounts</h2>
+                </div>
+                <span className="ops-count-pill">{customerRows.length} customers</span>
+              </div>
+              <div className="ops-table-wrap">
+                <table className="ops-table ops-wide-table">
+                  <thead><tr><th>Customer</th><th>Contact</th><th>KYC</th><th>Virtual account</th><th>Wallet</th><th>Bookings</th></tr></thead>
+                  <tbody>
+                    {customerRows.map((customer) => {
+                      const wallet = asRecord(customer.wallet);
+                      const account = asRecord(customer.virtual_account);
+                      const kyc = asRecord(customer.latest_kyc);
+                      const summary = asRecord(customer.booking_summary);
+                      return (
+                        <tr key={text(customer.id)}>
+                          <td><strong>{customerName(customer)}</strong><small>{text(customer.status)} · {text(customer.trust_tier_override, text(customer.trust_tier))}</small></td>
+                          <td><strong>{text(customer.whatsapp_number)}</strong><small>{text(customer.email)}</small></td>
+                          <td><span className={`ops-status ${text(kyc.status, "").toUpperCase() === "VERIFIED" ? "resolved" : "in-progress"}`}>{text(kyc.status, "NOT STARTED")}</span><small>{text(kyc.provider)}</small></td>
+                          <td><strong className="ops-account-number">{text(account.account_number, "Not generated")}</strong><small>{text(account.bank_name)} · {text(account.status)}</small></td>
+                          <td><strong>{money(wallet.balance)}</strong><small>{text(wallet.currency, "NGN")} available</small></td>
+                          <td><strong>{text(summary.total, "0")} total · {text(summary.open, "0")} open</strong><small>{money(summary.outstanding)} outstanding</small></td>
+                        </tr>
+                      );
+                    })}
+                    {!customerRows.length && <tr><td colSpan={6}><div className="ops-empty"><Users size={22} /><strong>No customers found</strong></div></td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {activeNav === "Deposits" && (
+            <section className="ops-card ops-data-panel">
+              <div className="ops-card-header">
+                <div>
+                  <span className="ops-card-kicker">Money movement</span>
+                  <h2>Deposits and wallet allocation</h2>
+                </div>
+                <span className="ops-count-pill">{depositRows.length} records</span>
+              </div>
+              <div className="ops-table-wrap">
+                <table className="ops-table ops-wide-table">
+                  <thead><tr><th>Received</th><th>Customer / account</th><th>Reference</th><th>Amount</th><th>Allocation</th><th>Status</th></tr></thead>
+                  <tbody>
+                    {depositRows.map((deposit) => {
+                      const customer = asRecord(deposit.customer);
+                      const account = asRecord(deposit.virtual_account);
+                      return (
+                        <tr key={text(deposit.id)}>
+                          <td><strong>{dateTime(deposit.updated_at || deposit.created_at)}</strong><small>{ageFrom(deposit.updated_at || deposit.created_at)} ago</small></td>
+                          <td><strong>{customerName(customer)}</strong><small>{text(account.account_number)} · {text(account.bank_name)}</small></td>
+                          <td><strong className="ops-reference">{text(deposit.provider_reference)}</strong><small>{text(deposit.payment_type)}</small></td>
+                          <td><strong>{money(deposit.amount)}</strong><small>{text(deposit.currency)}</small></td>
+                          <td><strong>{money(deposit.allocated_amount)} directly allocated</strong><small>{money(deposit.unallocated_amount)} not linked from this receipt</small></td>
+                          <td><span className={`ops-status ${text(deposit.status).toUpperCase() === "SUCCEEDED" ? "resolved" : "in-progress"}`}>{text(deposit.status)}</span></td>
+                        </tr>
+                      );
+                    })}
+                    {!depositRows.length && <tr><td colSpan={6}><div className="ops-empty"><Banknote size={22} /><strong>No deposits received</strong><span>OneCap webhook deposits will appear here.</span></div></td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {activeNav === "Reconciliation" && (
+            <section className="ops-card ops-data-panel">
+              <div className="ops-card-header">
+                <div><span className="ops-card-kicker">Provider controls</span><h2>Reconciliation exceptions</h2></div>
+                <span className="ops-count-pill">{reconciliation?.total ?? 0} records</span>
+              </div>
+              <div className="ops-mini-list ops-reconciliation-list">
+                {(reconciliation?.records || []).map((item) => {
+                  const row = asRecord(item);
+                  return <div key={text(row.id)}><strong>{text(row.status)} · {money(row.difference)}</strong><span>{text(row.provider_reference)} · {dateTime(row.created_at)}</span></div>;
+                })}
+                {!reconciliation?.total && <div><strong>No reconciliation exceptions</strong><span>Automated deposit polling is not configured; this view only shows records already created.</span></div>}
+              </div>
+            </section>
+          )}
 
           {activeNav === "Rules" && (
             <section className="ops-card ops-rules-panel">
@@ -813,7 +961,7 @@ export default function OperationsDashboard() {
               <>
                 <div className="ops-modal-summary">
                   <div><span>Status</span><strong>{text(selectedBooking?.status)}</strong></div>
-                  <div><span>Customer</span><strong>{text(selectedCustomer?.whatsapp_number, text(selectedBooking?.customer_id))}</strong></div>
+                  <div><span>Customer</span><strong>{customerName(selectedCustomer)}</strong></div>
                   <div><span>Balance</span><strong>{money(selectedBooking?.balance_amount)}</strong></div>
                 </div>
                 <div className="ops-detail-grid">
@@ -833,6 +981,54 @@ export default function OperationsDashboard() {
                       ["Post-travel", money(selectedBooking?.post_travel_amount)],
                     ]} />
                   </article>
+                  <article className="ops-detail-span">
+                    <h3><Plane size={15} /> Flight itinerary</h3>
+                    <div className="ops-flight-summary">
+                      <div className="ops-route-display">
+                        <strong>{text(selectedFlight.origin)}</strong>
+                        <span><Plane size={14} /> {text(selectedFlight.segment_count, "0")} segment(s)</span>
+                        <strong>{text(selectedFlight.destination)}</strong>
+                      </div>
+                      <DetailList rows={[
+                        ["Airline", selectedFlight.carrier || selectedFlight.carrier_code],
+                        ["Flight", selectedFlight.flight_number],
+                        ["Departure", dateTime(selectedFlight.departure_at || selectedBooking?.departure_date)],
+                        ["Arrival", dateTime(selectedFlight.arrival_at)],
+                        ["Cabin", selectedFlight.cabin_class],
+                        ["Trip", selectedFlight.trip_type],
+                        ["Stops", selectedFlight.stops],
+                      ]} />
+                    </div>
+                    <div className="ops-passenger-list">
+                      <span>Passengers</span>
+                      {(Array.isArray(selectedBooking?.passengers) ? selectedBooking.passengers : []).map((passenger, index) => (
+                        <strong key={`${passengerName(passenger)}-${index}`}>{passengerName(passenger)}</strong>
+                      ))}
+                    </div>
+                  </article>
+                  <article>
+                    <h3><Users size={15} /> Customer</h3>
+                    <DetailList rows={[
+                      ["Name", customerName(selectedCustomer)],
+                      ["WhatsApp", selectedCustomer?.whatsapp_number],
+                      ["Email", selectedCustomer?.email],
+                      ["Date of birth", selectedCustomer?.date_of_birth],
+                      ["Gender", selectedCustomer?.gender],
+                      ["Account status", selectedCustomer?.status],
+                      ["KYC", detail.kyc_sessions?.length ? asRecord(detail.kyc_sessions[0]).status : "Not started"],
+                    ]} />
+                  </article>
+                  <article>
+                    <h3><Landmark size={15} /> Wallet and virtual account</h3>
+                    <DetailList rows={[
+                      ["Wallet balance", money(selectedWallet.balance)],
+                      ["Currency", selectedWallet.currency],
+                      ["Account number", selectedAccount.account_number],
+                      ["Account name", selectedAccount.account_name],
+                      ["Bank", selectedAccount.bank_name],
+                      ["Account status", selectedAccount.status],
+                    ]} />
+                  </article>
                   <article>
                     <h3><CreditCard size={15} /> Payments</h3>
                     <div className="ops-mini-list">
@@ -841,6 +1037,16 @@ export default function OperationsDashboard() {
                         return <div key={text(row.id)}><strong>{money(row.amount)}</strong><span>{text(row.status)} · {text(row.payment_type)}</span></div>;
                       })}
                       {detail.payments.length === 0 && <span>No booking payments yet</span>}
+                    </div>
+                  </article>
+                  <article>
+                    <h3><Banknote size={15} /> Customer deposits</h3>
+                    <div className="ops-mini-list">
+                      {(detail.customer_deposits || []).map((payment) => {
+                        const row = asRecord(payment);
+                        return <div key={text(row.id)}><strong>{money(row.amount)} · {text(row.status)}</strong><span>{text(row.provider_reference)} · {dateTime(row.created_at)}</span></div>;
+                      })}
+                      {!detail.customer_deposits?.length && <span>No OneCap deposits yet</span>}
                     </div>
                   </article>
                   <article>

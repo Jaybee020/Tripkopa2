@@ -120,3 +120,25 @@ body {
 
 @media (max-width:1023px) { .ops-route-rule-grid,.ops-markup-grid { grid-template-columns:1fr; } }
 @media (max-width:700px) { .ops-login-card { padding:28px 22px; } .ops-rule-section { padding:18px 16px; } }
+
+.ops-data-panel { margin-top:14px; overflow:hidden; }
+.ops-wide-table { min-width:1040px; }
+.ops-count-pill { padding:6px 9px; border-radius:999px; color:var(--app-accent); background:var(--app-accent-soft); font-size:10px; white-space:nowrap; }
+.ops-account-number,.ops-reference { font-family:var(--font-geist-mono),monospace; letter-spacing:.025em; }
+.ops-detail-span { grid-column:1 / -1; }
+.ops-flight-summary { display:grid; grid-template-columns:minmax(250px,.8fr) minmax(320px,1.2fr); align-items:start; }
+.ops-route-display { min-height:150px; display:flex; align-items:center; justify-content:center; gap:18px; padding:24px; background:linear-gradient(135deg,#202927,#31403b); color:#fff; }
+.ops-route-display strong { font-size:27px; letter-spacing:-.04em; }
+.ops-route-display span { display:flex; align-items:center; gap:6px; color:#b9c6c0; font-size:10px; }
+.ops-flight-summary .ops-detail-list { padding-top:10px; }
+.ops-passenger-list { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:13px 16px; border-top:1px solid var(--app-rule); }
+.ops-passenger-list>span { margin-right:4px; color:var(--app-faint); font-size:10px; text-transform:uppercase; letter-spacing:.07em; }
+.ops-passenger-list strong { padding:6px 9px; border:1px solid var(--app-rule); border-radius:999px; background:#fffefa; font-size:10px; font-weight:500; }
+.ops-reconciliation-list { padding:0 22px 22px; }
+
+@media (max-width:700px) {
+  .ops-flight-summary { grid-template-columns:1fr; }
+  .ops-route-display { min-height:110px; }
+  .ops-route-display strong { font-size:22px; }
+  .ops-detail-span { grid-column:auto; }
+}

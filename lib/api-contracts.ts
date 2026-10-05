@@ -567,8 +567,25 @@ export const OperationsBookingDetail = z.object({
   risk_events: z.array(Any).optional(),
   trust_tier_history: z.array(Any).optional(),
   financing_profile: FinancingProfile.optional(),
+  wallet: Any.nullable().optional(),
+  virtual_account: Any.nullable().optional(),
+  kyc_sessions: z.array(Any).optional(),
+  customer_deposits: z.array(Any).optional(),
 });
 export type OperationsBookingDetail = z.infer<typeof OperationsBookingDetail>;
+export const OperationsOverview = z.object({
+  customers: z.array(Any),
+  deposits: z.array(Any),
+  metrics: z.object({
+    customers: z.number(),
+    active_virtual_accounts: z.number(),
+    wallet_balance: z.number(),
+    successful_deposits: z.number(),
+    total_deposited: z.number(),
+    unallocated_funds: z.number(),
+  }),
+});
+export type OperationsOverview = z.infer<typeof OperationsOverview>;
 export const OperationsRuleConfig = z
   .object({
     key: z.string(),

@@ -4,6 +4,7 @@ import { supabase as serviceSupabase } from "@/lib/services/supabase";
 import { failure } from "@/lib/api-utils";
 import { loadFinancingRules } from "@/lib/financing-rules";
 import { evaluateRepaymentLifecycle, refreshCustomerTrustTier } from "@/lib/trust-financing";
+import { summarizeFlight } from "@/lib/operations-flight";
 
 export async function GET(
   _request: Request,
@@ -42,6 +43,10 @@ export async function GET(
       audit,
       riskEvents,
       tierHistory,
+      wallet,
+      virtualAccount,
+      kycSessions,
+      customerDeposits,
     ] = await Promise.all([
       serviceSupabase.admin
         .from("payments")
@@ -72,7 +77,7 @@ export async function GET(
         .maybeSingle(),
       serviceSupabase.admin
         .from("customers")
-        .select("id,whatsapp_number,status,first_name,last_name,email,trust_tier,trust_tier_override,successful_cycles,on_time_repayment_rate,reminder_dependency_rate")
+        .select("id,whatsapp_number,status,title,first_name,middle_name,last_name,email,date_of_birth,gender,trust_tier,trust_tier_override,successful_cycles,on_time_repayment_rate,reminder_dependency_rate")
         .eq("id", booking.customer_id)
         .maybeSingle(),
       serviceSupabase.admin
@@ -94,14 +99,41 @@ export async function GET(
         .eq("customer_id", booking.customer_id)
         .order("created_at", { ascending: false })
         .limit(20),
+      serviceSupabase.admin
+        .from("wallets")
+        .select("id,currency,balance,updated_at")
+        .eq("customer_id", booking.customer_id)
+        .maybeSingle(),
+      serviceSupabase.admin
+        .from("virtual_accounts")
+        .select("id,provider,account_number,account_name,bank_name,status,created_at,updated_at")
+        .eq("customer_id", booking.customer_id)
+        .eq("provider", "onecap_providus")
+        .maybeSingle(),
+      serviceSupabase.admin
+        .from("kyc_sessions")
+        .select("id,provider,status,provider_reference,created_at,updated_at")
+        .eq("customer_id", booking.customer_id)
+        .order("created_at", { ascending: false })
+        .limit(10),
+      serviceSupabase.admin
+        .from("payments")
+        .select("id,booking_id,provider_reference,payment_type,amount,currency,status,created_at,updated_at")
+        .eq("customer_id", booking.customer_id)
+        .eq("provider", "onecap_providus")
+        .order("created_at", { ascending: false })
+        .limit(50),
     ]);
 
-    for (const result of [payments, allocations, installments, ledger, itinerary, customer, audit, riskEvents, tierHistory]) {
+    for (const result of [payments, allocations, installments, ledger, itinerary, customer, audit, riskEvents, tierHistory, wallet, virtualAccount, kycSessions, customerDeposits]) {
       if (result.error) throw result.error;
     }
 
     return NextResponse.json({
-      booking: currentBooking,
+      booking: {
+        ...currentBooking,
+        flight: summarizeFlight(currentBooking.flight_details),
+      },
       customer: customer.data,
       payments: payments.data || [],
       payment_allocations: allocations.data || [],
@@ -112,6 +144,10 @@ export async function GET(
       risk_events: riskEvents.data || [],
       trust_tier_history: tierHistory.data || [],
       financing_profile: trust,
+      wallet: wallet.data,
+      virtual_account: virtualAccount.data,
+      kyc_sessions: kycSessions.data || [],
+      customer_deposits: customerDeposits.data || [],
     });
   } catch (error) {
     return failure(error);

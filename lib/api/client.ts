@@ -5,7 +5,7 @@
 // pages and IntegrationAgent should import from here instead of
 // rolling their own fetch() calls.
 
-import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FinancingProfile, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingDetail, OperationsBookingList, OperationsRuleConfig, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuotePreflightResult, QuoteRevalidationInput, QuoteRevalidationResult, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
+import type { AuthSession, Booking, BookingCancellationInput, BookingCreateInput, BvnVerificationInput, CurrentUser, CustomerProfile, CustomerProfileUpdate, FinancingProfile, FlightSearch, FlightSearchInput, Installment, Itinerary, KycBrowserSession, KycSession, KycSessionCreateInput, KycStatus, KycTokenExchangeInput, LedgerEntryList, OperationalEventList, OperationsBookingDetail, OperationsBookingList, OperationsOverview, OperationsRuleConfig, PasswordResetConfirmation, PasswordResetRequest, Payment, PaymentIntent, PaymentIntentCreateInput, PaystackWebhookInput, QoreidWebhookInput, Quote, QuoteCreateInput, QuotePreflightResult, QuoteRevalidationInput, QuoteRevalidationResult, ReconciliationReport, RefreshTokenInput, Refund, RefundCreateInput, RepaymentSchedule, SigninInput, SignupInput, VirtualAccount, Wallet } from "@/lib/api-contracts";
 
 export class ApiError extends Error {
   public readonly code?: string;
@@ -191,6 +191,10 @@ export async function createWebhooksKycQoreid(body: QoreidWebhookInput): Promise
 
 export async function listOperationsBookings(): Promise<OperationsBookingList> {
   return request<OperationsBookingList>("GET", "/api/operations/bookings");
+}
+
+export async function getOperationsOverview(): Promise<OperationsOverview> {
+  return request<OperationsOverview>("GET", "/api/operations/overview");
 }
 
 export async function getOperationsBookingById(booking_id: string): Promise<OperationsBookingDetail> {
