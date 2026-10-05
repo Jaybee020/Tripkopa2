@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Smoke-test QoreID's BVN Boolean Match product.
+
 QOREID_BASE_URL="${QOREID_BASE_URL:-https://api.qoreid.com}"
 
 required_vars=(
@@ -45,7 +47,7 @@ payload="$(
     + (if $phone == "" then {} else {phone: $phone} end)'
 )"
 
-curl -sS -X POST "${QOREID_BASE_URL}/v1/ng/identities/bvn-basic/${BVN}" \
+curl -sS -X POST "${QOREID_BASE_URL}/v1/ng/identities/bvn-match/${BVN}" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \

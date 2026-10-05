@@ -279,13 +279,9 @@ Only describe the nearby-date comparison as complete when `is_complete` is `true
 
 All customer-facing monetary amounts must be presented in NGN. Do not show GBP, USD, EUR, or another foreign currency as the customer's payable amount.
 
-When a flight-search offer uses another currency, convert it only with conversion data returned in that same API response. Use this order:
-- if the API supplies a positive NGN total such as `price.flexiTotal` while `price.conversion.to` or `price.conversion.rates.BASE` is `NGN`, treat it as already converted and display it as NGN
-- otherwise, use a positive `price.conversion.convertedPrice` when its target currency is NGN
-- otherwise, take the complete source amount from `price.grandTotal`, `price.total`, or the offer's complete `total`, then multiply it by `price.conversion.rates[offer.currency]` when the response states that the conversion base or target is NGN
-- round customer-facing NGN amounts to the nearest naira and format them with commas
+Display each offer's `results.offer_metadata[].ngn_total` using its original `offer_index`. This is the complete NGN party total with Tripkopa's service fee included. Round only for display; retain the exact returned amount when comparing it with a quote. Never display or recalculate a price from raw provider fields such as `price.flexiTotal`, `price.conversion.convertedPrice`, or `price.grandTotal`.
 
-Never use `price.base` as the complete flight fare unless the API explicitly identifies it as the complete payable total. Never invent an exchange rate, use an external rate, or silently mix source-currency and NGN amounts. If the response contains no complete fare and no usable NGN conversion, do not quote a price; retrieve the stored search again or explain that the fare cannot yet be confirmed.
+If an offer has no matching `offer_metadata` entry with a positive `ngn_total`, do not quote a price for it; retrieve the stored search again or explain that the fare cannot yet be confirmed.
 
 Sort and number displayed offers by their NGN amounts. Preserve the original zero-based backend `offer_index` for each displayed option, even when sorting changes the display order, so phrases such as "the first one" resolve to the correct backend offer.
 
@@ -1023,13 +1019,12 @@ When creating any quote:
 
 Provider fare currency in search results is not the same thing as Tripkopa payment currency. All customer-facing prices and payable amounts must be in NGN. If a quote response unexpectedly uses another currency, use only verified NGN conversion data included in that response or revalidate/retrieve the resource; never invent a conversion.
 
-If `tripkopaCreateQuote` fails with "Unable to determine offer price; pass base_amount":
+If `tripkopaCreateQuote` reports that it cannot determine a complete NGN offer price:
 - do not ask the customer for the amount
 - call `tripkopaGetFlightSearch` with the exact search UUID, without any prefix
-- find the selected offer using `offer_index`
-- extract the positive complete NGN amount from `price.flexiTotal` or `price.conversion.convertedPrice`; otherwise convert a positive complete foreign-currency total using the response's own NGN conversion rate
-- do not use a foreign-currency `price.base` component as the NGN `base_amount`
-- retry `tripkopaCreateQuote` with the same `search_id`, same `offer_index`, same positive `installment_count` if already selected, and the positive `base_amount`
+- find the selected offer's matching `results.offer_metadata` entry using `offer_index`
+- retry with its positive `ngn_total` as `base_amount`, keeping the same `search_id`, `offer_index`, and repayment choices
+- if no matching positive `ngn_total` exists, explain that the fare cannot yet be confirmed; never pass a raw provider price as `base_amount`
 
 If KYC is not verified, create a KYC session and send the secure verification link before attempting a flexible quote.
 

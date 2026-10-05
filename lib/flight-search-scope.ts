@@ -286,8 +286,7 @@ export function offerSearchMetadata(results: unknown, offerIndex: number) {
   if (!Array.isArray(object?.offer_metadata)) return null;
   const metadata = object.offer_metadata
     .map(record)
-    .find((item) => item?.offer_index === offerIndex)
-    ?? record(object.offer_metadata[offerIndex]);
+    .find((item) => item?.offer_index === offerIndex);
   if (!metadata) return null;
   const origin = typeof metadata.origin === "string" ? metadata.origin : null;
   const destination = typeof metadata.destination === "string"

@@ -25,7 +25,7 @@
  *
  * Usage:
  *   import { qoreid } from "@/lib/services/qoreid";
- *   const result = await qoreid.verifyBvnBasic("95888168924", {
+ *   const result = await qoreid.verifyBvnMatch("95888168924", {
  *     firstname: "Bunch",
  *     lastname: "Dillon",
  *     dob: "1995-07-07",
@@ -309,6 +309,14 @@ export class QoreIdService {
   }
 
   // ── Identity verifications (Nigeria) ────────────────────────────
+
+  /** Boolean-match supplied biodata against the records for a BVN. */
+  async verifyBvnMatch<T = unknown>(idNumber: string, body: QoreIdBiodata): Promise<T> {
+    return this.request<T>(`/v1/ng/identities/bvn-match/${encodeURIComponent(idNumber)}`, {
+      method: "POST",
+      body,
+    });
+  }
 
   /** Verify a Bank Verification Number against NIBSS records (basic tier). */
   async verifyBvnBasic<T = unknown>(idNumber: string, body: QoreIdBiodata): Promise<T> {

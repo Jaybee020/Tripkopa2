@@ -18,9 +18,14 @@ type BvnLogContext = {
 type QoreIdBvnResult = {
   id?: string | number;
   applicant?: { firstname?: string; lastname?: string };
-  summary?: { bvn_check?: { status?: string } };
+  summary?: {
+    bvn_match_check?: {
+      status?: string;
+      fieldMatches?: Record<string, boolean>;
+    };
+  };
   status?: { status?: string; state?: string };
-  bvn?: { firstname?: string; lastname?: string; birthdate?: string; gender?: string };
+  bvn_match?: { fieldMatches?: Record<string, boolean> };
 };
 
 type CustomerBvnProfile = {
@@ -110,6 +115,15 @@ function mockBvnResult(
   sessionId: string,
   profile: CustomerBvnProfile,
 ): QoreIdBvnResult {
+  const fieldMatches: Record<string, boolean> = {
+    firstname: true,
+    lastname: true,
+    email: true,
+    phone: true,
+  };
+  if (profile.date_of_birth) fieldMatches.dob = true;
+  if (profile.gender) fieldMatches.gender = true;
+
   return {
     id: `mock-qoreid-bvn-${sessionId}`,
     applicant: {
@@ -117,19 +131,17 @@ function mockBvnResult(
       lastname: profile.last_name,
     },
     summary: {
-      bvn_check: {
-        status: "MATCH",
+      bvn_match_check: {
+        status: "EXACT_MATCH",
+        fieldMatches,
       },
     },
     status: {
       status: "verified",
       state: "verified",
     },
-    bvn: {
-      firstname: profile.first_name,
-      lastname: profile.last_name,
-      birthdate: profile.date_of_birth || undefined,
-      gender: profile.gender || undefined,
+    bvn_match: {
+      fieldMatches,
     },
   };
 }
@@ -149,7 +161,7 @@ async function verifyBvn(
     return mockBvnResult(sessionId, profile);
   }
 
-  return qoreid.verifyBvnBasic<QoreIdBvnResult>(bvn, {
+  return qoreid.verifyBvnMatch<QoreIdBvnResult>(bvn, {
     firstname: profile.first_name,
     lastname: profile.last_name,
     dob: profile.date_of_birth || undefined,
@@ -159,15 +171,21 @@ async function verifyBvn(
   });
 }
 
+function getFieldMatches(result: QoreIdBvnResult): Record<string, boolean> {
+  return {
+    ...(result.bvn_match?.fieldMatches || {}),
+    ...(result.summary?.bvn_match_check?.fieldMatches || {}),
+  };
+}
+
 function normalizedKycResult(result: QoreIdBvnResult, match?: string | null) {
   return {
     provider_verification_id: result.id ? String(result.id) : null,
     status: "VERIFIED",
     name_match: match || null,
-    verified_first_name: result.applicant?.firstname || result.bvn?.firstname || null,
-    verified_last_name: result.applicant?.lastname || result.bvn?.lastname || null,
-    verified_date_of_birth: result.bvn?.birthdate || null,
-    verified_gender: result.bvn?.gender || null,
+    field_matches: getFieldMatches(result),
+    verified_first_name: result.applicant?.firstname || null,
+    verified_last_name: result.applicant?.lastname || null,
   };
 }
 
@@ -183,8 +201,12 @@ function existingActiveAccountResult(
         lastname: profile.last_name,
       },
       summary: {
-        bvn_check: {
+        bvn_match_check: {
           status: "ACCOUNT_ALREADY_ACTIVE",
+          fieldMatches: {
+            firstname: true,
+            lastname: true,
+          },
         },
       },
       status: {
@@ -331,12 +353,19 @@ export async function POST(
         ...context,
         provider_verification_id: result.id ? String(result.id) : null,
         provider_status: result.status?.status || result.status?.state || null,
-        name_match: result.summary?.bvn_check?.status || null,
+        name_match: result.summary?.bvn_match_check?.status || null,
+        field_matches: getFieldMatches(result),
       });
 
       const verified = result.status?.status?.toLowerCase() === "verified";
-      const match = result.summary?.bvn_check?.status?.toUpperCase();
-      if (!verified || match === "NO_MATCH") {
+      const match = result.summary?.bvn_match_check?.status?.toUpperCase();
+      const fieldMatches = getFieldMatches(result);
+      const requiredNamesMatch =
+        fieldMatches.firstname === true && fieldMatches.lastname === true;
+      const everyReportedFieldMatches =
+        Object.keys(fieldMatches).length > 0 &&
+        Object.values(fieldMatches).every((fieldMatch) => fieldMatch === true);
+      if (!verified || !requiredNamesMatch || !everyReportedFieldMatches) {
         throw Object.assign(
           new Error("BVN verification did not match the customer profile"),
           { status: 422 },

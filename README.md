@@ -112,7 +112,8 @@ Tripkopa does not call Providus directly. It uses the OneCap partner middleware,
 which proxies requests under OneCap's Providus credentials and identity.
 
 The customer completes BVN verification in the short-lived KYC browser session.
-Tripkopa sends the BVN to QoreID and then OneCap within the same server request;
+Tripkopa checks the submitted biodata with QoreID's BVN Boolean Match endpoint,
+then sends the BVN to OneCap within the same server request;
 the raw BVN is never written to the database, returned to SupaOS, or placed in a
 webhook payload. After successful verification, the Providus account is stored
 against the Tripkopa customer and returned by `GET /api/wallet`.
